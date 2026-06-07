@@ -15,11 +15,12 @@ MapLibre, OpenFreeMap, Overpass, Nominatim, Autobahn-GmbH-API).
 
 ## Screenshot
 
-![Beispiel: Rundtour Ulm–Blaubeuren mit Wegpunkt- und Baustellen-Markern](docs/screenshot.jpg)
+![Die App: Wegpunkt-Eingabefelder mit Abschnitts-Profilen, Karte mit Route und Statusleiste](docs/screenshot.jpg)
 
-*Rundtour von Ulm (A) nach Blaubeuren (B) und zurück: kurvige Landstraßen statt
-Ortsdurchfahrten, Wegpunkt-Marker (A/B) und entlang der Route gemiedene
-Baustellen (⚠).*
+*Rundtour Ulm (A) ↔ Blaubeuren (B): links die Wegpunkte als Eingabefelder mit
+⚡/🌀-Umschalter je Teilstrecke, Profil-Vorgabe und Baustellen-Optionen; rechts die
+kurvige Route auf der Karte; unten die dauerhafte Statusleiste mit Distanz, Fahrzeit
+und GPX-Export.*
 
 ## Architektur
 
