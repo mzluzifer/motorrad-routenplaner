@@ -7,8 +7,10 @@ import {
   fetchPois,
   fetchRoadworks,
   fetchRoute,
+  fetchWeather,
   reverseGeocode,
 } from "./api/client";
+import { projectDistanceAlong } from "./geo";
 import type {
   LngLat,
   Poi,
@@ -16,6 +18,7 @@ import type {
   Roadwork,
   RouteResult,
   Waypoint,
+  WeatherPoint,
 } from "./types";
 
 const newId = () =>
@@ -59,6 +62,19 @@ export default function App() {
   const [fuelPois, setFuelPois] = useState<Poi[]>([]);
   const [fuelLoading, setFuelLoading] = useState(false);
   const [fuelError, setFuelError] = useState<string | null>(null);
+
+  // Wetter entlang der Strecke (leeres Datum = heute).
+  const [weatherDate, setWeatherDate] = useState("");
+  const [weather, setWeather] = useState<WeatherPoint[]>([]);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+
+  // Breite der Seitenleiste (ziehbar, in localStorage gemerkt).
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem("sidebarWidth"));
+    return v >= 280 && v <= 720 ? v : 360;
+  });
+  const draggingRef = useRef(false);
 
   // Effektive Punktliste fürs Routing (inkl. Rückweg bei Rundtour).
   const effectivePoints = useMemo<LngLat[]>(() => {
@@ -199,6 +215,34 @@ export default function App() {
     };
   }, [waypoints, includeOsm]);
 
+  // --- Seitenleiste in der Breite ziehen ---
+  useEffect(() => {
+    localStorage.setItem("sidebarWidth", String(sidebarWidth));
+  }, [sidebarWidth]);
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      setSidebarWidth(Math.min(720, Math.max(280, e.clientX)));
+    };
+    const up = () => {
+      draggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, []);
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
   const toggleRoadwork = (id: string) =>
     setDisabledRoadworks((s) => {
       const next = new Set(s);
@@ -235,8 +279,27 @@ export default function App() {
     }
   };
 
+  // An welcher Stelle der Wegpunktliste passt der POI geografisch am besten?
+  // Wir projizieren den POI auf die berechnete Route und ordnen ihn dem Abschnitt
+  // zu, in dem die Projektion liegt -> Einfügen direkt nach dessen Start-Wegpunkt.
+  const insertIndexForPoi = (poi: Poi): number => {
+    const line = routeLine(route);
+    const legs = route?.legs ?? [];
+    if (line.length < 2 || legs.length === 0) {
+      return Math.max(1, waypoints.length - 1);
+    }
+    const dAlong = projectDistanceAlong(line, [poi.lng, poi.lat]);
+    let cum = 0;
+    for (let i = 0; i < legs.length; i++) {
+      cum += legs[i].distanceM;
+      if (dAlong <= cum) return i + 1;
+    }
+    return legs.length;
+  };
+
   const togglePoi = (poi: Poi) => {
     const icon = poi.category === "fuel" ? "⛽" : "🍴";
+    const insertAt = insertIndexForPoi(poi);
     setSelectedPois((s) => {
       const next = new Set(s);
       if (next.has(poi.id)) {
@@ -244,9 +307,9 @@ export default function App() {
         setWaypoints((w) => w.filter((p) => p.id !== `poi-${poi.id}`));
       } else {
         next.add(poi.id);
-        // Als Zwischenziel vor dem Ziel einfügen
+        // An der geografisch passenden Stelle einfügen (vor/nach dem Wegpunkt).
         setWaypoints((w) => {
-          const insertAt = Math.max(1, w.length - 1);
+          const at = Math.min(Math.max(1, insertAt), w.length);
           const wp: Waypoint = {
             id: `poi-${poi.id}`,
             lng: poi.lng,
@@ -254,11 +317,27 @@ export default function App() {
             label: `${icon} ${poi.name}`,
             profile: defaultProfile,
           };
-          return [...w.slice(0, insertAt), wp, ...w.slice(insertAt)];
+          return [...w.slice(0, at), wp, ...w.slice(at)];
         });
       }
       return next;
     });
+  };
+
+  // --- Wetter entlang der Strecke ---
+  const searchWeather = async () => {
+    const line = routeLine(route);
+    if (line.length < 2) return;
+    setWeatherLoading(true);
+    setWeatherError(null);
+    try {
+      const res = await fetchWeather(line, weatherDate || undefined, 5);
+      setWeather(res.points);
+    } catch (e: any) {
+      setWeatherError(e.message ?? String(e));
+    } finally {
+      setWeatherLoading(false);
+    }
   };
 
   // Essen nach OSM-Qualität gefiltert (verifiziert + >= Schwelle).
@@ -272,6 +351,21 @@ export default function App() {
     [filteredFood, fuelPois],
   );
 
+  // Wegpunkt-Markierungen fürs Höhenprofil (kumulierte Distanz + Buchstabe).
+  const waypointMarks = useMemo(() => {
+    const legs = route?.legs ?? [];
+    if (!legs.length) return [] as { atM: number; label: string }[];
+    const letter = (i: number) => String.fromCharCode(65 + i);
+    const marks = [{ atM: 0, label: letter(0) }];
+    let cum = 0;
+    for (let i = 0; i < legs.length; i++) {
+      cum += legs[i].distanceM;
+      const isReturn = roundTrip && i === legs.length - 1;
+      marks.push({ atM: cum, label: isReturn ? letter(0) : letter(i + 1) });
+    }
+    return marks;
+  }, [route, roundTrip]);
+
   // --- GPX-Export (für die Statusleiste unter der Karte) ---
   const exportGpx = () => {
     const track = routeLine(route);
@@ -281,7 +375,10 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={{ ["--sidebar-w" as string]: `${sidebarWidth}px` } as React.CSSProperties}
+    >
       <Sidebar
         waypoints={waypoints}
         profile={defaultProfile}
@@ -312,6 +409,12 @@ export default function App() {
         fuelLoading={fuelLoading}
         fuelError={fuelError}
         onSearchFuel={searchFuel}
+        weatherDate={weatherDate}
+        setWeatherDate={setWeatherDate}
+        weather={weather}
+        weatherLoading={weatherLoading}
+        weatherError={weatherError}
+        onSearchWeather={searchWeather}
         onTogglePoi={togglePoi}
         onAddWaypoint={addWaypoint}
         onRemoveWaypoint={removeWaypoint}
@@ -321,8 +424,10 @@ export default function App() {
           setSelectedPois(new Set());
           setPois([]);
           setFuelPois([]);
+          setWeather([]);
         }}
       />
+      <div className="resizer" onMouseDown={startResize} title="Breite ziehen" />
       <div className="main">
         <MapView
           waypoints={waypoints}
@@ -332,6 +437,7 @@ export default function App() {
           avoidConstruction={avoidConstruction}
           pois={mapPois}
           selectedPois={selectedPois}
+          weather={weather}
           onMapClick={(lng, lat) => addWaypoint(lng, lat)}
           onTogglePoi={togglePoi}
         />
@@ -339,6 +445,7 @@ export default function App() {
           route={route}
           routeLoading={routeLoading}
           routeError={routeError}
+          waypointMarks={waypointMarks}
           onExportGpx={exportGpx}
         />
       </div>

@@ -11,6 +11,7 @@ import { route as brouterRoute } from "./services/brouter.js";
 import { findPois } from "./services/overpass.js";
 import { getRoadworks, bboxOf } from "./services/roadworks.js";
 import { geocode, reverseGeocode } from "./services/geocode.js";
+import { weatherAlong } from "./services/weather.js";
 import { buildGpx, type GpxWaypoint } from "./services/gpx.js";
 import { staticAsset, devPublicDir } from "./resources.js";
 import type { LngLat, NoGo, ProfileName, RouteRequest } from "./types.js";
@@ -105,6 +106,22 @@ app.post<{
     }
   },
 );
+
+// --- Wetter entlang der Route ---------------------------------------------
+app.post<{
+  Body: { line: LngLat[]; date?: string; samples?: number };
+}>("/api/weather", async (req, reply) => {
+  const { line, date, samples = 5 } = req.body ?? { line: [] };
+  if (!Array.isArray(line) || line.length < 2) {
+    return reply.code(400).send({ error: "Routen-Geometrie fehlt." });
+  }
+  try {
+    return await weatherAlong(line, date, Math.min(Math.max(samples, 2), 10));
+  } catch (err: any) {
+    req.log.error(err);
+    return reply.code(502).send({ error: String(err.message ?? err) });
+  }
+});
 
 // --- GPX-Export ------------------------------------------------------------
 app.post<{ Body: { track: LngLat[]; waypoints?: GpxWaypoint[]; name?: string } }>(

@@ -32,6 +32,40 @@ export interface RouteLeg {
   durationS: number;
 }
 
+/** Ein Punkt im Höhenprofil: kumulierte Distanz (m) + Höhe über Meer (m). */
+export interface ElevationSample {
+  /** Kumulierte Distanz ab Start in Metern. */
+  d: number;
+  /** Höhe in Metern. */
+  e: number;
+}
+
+/** Eine Maut- oder Fährstelle entlang der Route. */
+export interface RouteFeaturePoint {
+  lng: number;
+  lat: number;
+  kind: "toll" | "ferry";
+  /** Länge des betroffenen Abschnitts in Metern. */
+  lengthM: number;
+  /** Position auf der Route (kumulierte Distanz in Metern). */
+  atM: number;
+  label?: string;
+}
+
+/** Wetter an einem Stützpunkt entlang der Route (Tageswerte). */
+export interface WeatherPoint {
+  lng: number;
+  lat: number;
+  /** Position auf der Route (kumulierte Distanz in Metern). */
+  atM: number;
+  /** WMO-Wettercode (-1 = unbekannt). */
+  weatherCode: number;
+  tempMax: number | null;
+  tempMin: number | null;
+  precipMm: number | null;
+  windMaxKmh: number | null;
+}
+
 /** Eine normalisierte Baustelle. */
 export interface Roadwork {
   id: string;

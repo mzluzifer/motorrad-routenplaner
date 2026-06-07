@@ -7,9 +7,12 @@ oder Karten-Klick gesetzt, Start optional per **aktuellem Standort**. Profil
 Wegpunkten (Kurvig meidet Städte & Dörfer, Autobahn ist am schnellsten); **Distanz und
 Fahrzeit je Teilstrecke** werden direkt am Wegpunkt angezeigt. Vermeidung aktueller
 **Baustellen** (einklappbares Menü, einzeln übersteuerbar), Auswahl von
-**Restaurants/Imbissen und Tankstellen** entlang der Strecke und **GPX-Export** für
-Navi/Handy (OsmAnd, Calimoto, Garmin …). Gesamt-Distanz, Fahrzeit und Export liegen in
-einer **Statusleiste unter der Karte**. Große, zoombare Karte.
+**Restaurants/Imbissen und Tankstellen** entlang der Strecke (Info per **Maus-Hover**,
+Klick fügt sie an der **geografisch passenden Stelle** ein) und **GPX-Export** für
+Navi/Handy (OsmAnd, Calimoto, Garmin …). Dazu **Wetter entlang der Strecke** (heute
+oder zu einem Datum), **Maut & Fähren** und ein **Höhenprofil** in der **Statusleiste
+unter der Karte** (mit Gesamt-Distanz, Fahrzeit und Export). Große, zoombare Karte mit
+**in der Breite ziehbarer Seitenleiste**.
 
 Alles basiert auf Open-Source-Bausteinen und offenen Daten (OpenStreetMap, BRouter,
 MapLibre, OpenFreeMap, Overpass, Nominatim, Autobahn-GmbH-API).
@@ -35,7 +38,11 @@ Backend (Node/Fastify)  ──►  BRouter (Routing-Engine)
    ├─ /api/reverse     Standort -> Adresse (Nominatim, „aktueller Standort")
    ├─ /api/roadworks   Baustellen (Autobahn-GmbH-API + OSM/Overpass)
    ├─ /api/pois        Restaurants/Imbisse + Tankstellen im Puffer (Overpass)
+   ├─ /api/weather     Tageswetter an Stützpunkten der Route (Open-Meteo)
    └─ /api/gpx         Track + Wegpunkte -> GPX-Datei
+
+Routing liefert zusätzlich Distanz/Zeit je Abschnitt, das Höhenprofil sowie
+Maut-/Fährabschnitte (aus den BRouter-WayTags).
 ```
 
 ## Einfachster Start: fertige Windows-EXE 🪟
@@ -143,10 +150,14 @@ herum führt.
 ## Einkehr (Restaurants/Imbisse) & Tankstellen
 
 Nach der Routenberechnung „Entlang der Strecke suchen" – findet `restaurant`,
-`fast_food` und `cafe` im 500-m-Puffer um die Route (Overpass). Auswahl fügt den Ort
-als Zwischenziel ein, die Route wird neu berechnet. Analog gibt es eine
-**Tankstellen-Suche** (`amenity=fuel`): reale, benannte Tankstellen aus OpenStreetMap
-mit Marke und Distanz zur Route, ebenfalls per Klick als Zwischenziel einfügbar.
+`fast_food` und `cafe` im 500-m-Puffer um die Route (Overpass). Auf der Karte zeigt ein
+**Maus-Hover** über einem Marker die Details; ein **Klick** fügt den Ort als Zwischenziel
+ein – und zwar an der **geografisch passenden Stelle** (zwischen den beiden Wegpunkten,
+deren Teilstrecke am nächsten liegt), nicht einfach am Ende. Die Route wird neu berechnet.
+Analog gibt es eine **Tankstellen-Suche** (`amenity=fuel`): reale, benannte Tankstellen
+aus OpenStreetMap mit Marke und Distanz zur Route.
+
+Die Overpass-Abfragen laufen über eine **Fallback-Kette** mehrerer Server (siehe unten).
 
 **Qualität/„Sterne":** Echte Nutzer-/Google-Bewertungen gibt es in offenen Daten
 nicht. Statt einer (kostenpflichtigen, proprietären) Google-Places-Anbindung wird die
@@ -155,11 +166,31 @@ nicht. Statt einer (kostenpflichtigen, proprietären) Google-Places-Anbindung wi
 Schieberegler filtert auf eine Mindest-Qualität (Vorgabe 4,5). Das ist transparent
 **keine** echte Bewertung, sondern ein Datenqualitäts-Indikator.
 
-## Routeninformation (Statusleiste)
+## Wetter entlang der Strecke
+
+Über **Open-Meteo** (frei, kein API-Key) wird das **Tageswetter** an mehreren
+Stützpunkten entlang der Route abgefragt – für **heute** oder ein **gewähltes Datum**
+(Vergangenheit per Archiv-API, Prognose bis ~16 Tage). Angezeigt werden Wetterlage
+(Symbol), Temperatur-Spanne, Niederschlag und Wind – in der Seitenleiste und als Marker
+auf der Karte (Details per Hover).
+
+## Maut & Fähren
+
+Aus den **BRouter-WayTags** (`processUnusedTags`) erkennt das Backend `toll=yes`- und
+`route=ferry`-Abschnitte und meldet Position und Länge. In der App erscheinen sie als
+eigene Liste (Maut 💶 / Fähre ⛴️) und als Karten-Marker.
+
+## Höhenprofil & Routeninformation (Statusleiste)
 
 Distanz, Fahrzeit (geschätzt) und der **GPX-Export** liegen dauerhaft in einer
-Statusleiste **unter der Karte** – immer sichtbar, unabhängig vom Scrollzustand der
-Seitenleiste.
+Statusleiste **unter der Karte**. Mittig – dynamisch über die volle Breite – zeigt sie
+das **Höhenprofil** der Route inklusive der **Wegpunkt-Markierungen** (A, B, C …). Die
+Höhendaten stammen aus der BRouter-Antwort.
+
+## Seitenleiste in der Breite ziehen
+
+Zwischen Seitenleiste und Karte liegt ein **Ziehbalken**: die Breite der Seitenleiste
+lässt sich frei anpassen (wird im Browser gemerkt).
 
 ## Konfiguration (Backend, `.env`)
 
@@ -188,4 +219,4 @@ Seitenleiste.
 ## Tech-Stack
 
 React · TypeScript · Vite · MapLibre GL · OpenFreeMap · Fastify · Turf.js · BRouter ·
-OpenStreetMap (Overpass, Nominatim) · Autobahn-GmbH-API.
+OpenStreetMap (Overpass, Nominatim) · Autobahn-GmbH-API · Open-Meteo (Wetter).

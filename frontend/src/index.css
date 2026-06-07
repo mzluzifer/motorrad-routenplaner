@@ -22,10 +22,18 @@ html, body, #root {
 
 .app {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: var(--sidebar-w, 360px) 6px 1fr;
   height: 100vh;
   overflow: hidden;
 }
+
+/* Ziehbarer Trenner zwischen Seitenleiste und Karte */
+.resizer {
+  background: #3a4253;
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+.resizer:hover { background: var(--accent); }
 
 /* Rechte Spalte: Karte oben, Statusleiste unten */
 .main {
@@ -59,13 +67,43 @@ html, body, #root {
 .sb-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .sb-value { font-size: 18px; font-weight: 700; }
 .sb-sep { width: 1px; height: 28px; background: #3a4253; }
-.sb-msg { flex: 1; min-width: 0; font-size: 13px; }
+.sb-mid { flex: 1; min-width: 0; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .sb-export { flex: 0 0 auto; }
 
+/* Höhenprofil in der Statusleiste – mittig, dynamisch breit */
+.elev {
+  position: relative;
+  width: 100%;
+  height: 56px;
+}
+.elev-svg { width: 100%; height: 100%; display: block; }
+.elev-area { fill: rgba(255, 122, 24, 0.18); stroke: none; }
+.elev-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.elev-wp { stroke: var(--accent-2); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; opacity: 0.7; }
+.elev-wp-label {
+  position: absolute; top: -2px; transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: var(--accent-2);
+  background: var(--panel); padding: 0 3px; border-radius: 4px;
+}
+.elev-max { position: absolute; top: 0; left: 2px; font-size: 10px; color: var(--muted); }
+.elev-min { position: absolute; bottom: 0; left: 2px; font-size: 10px; color: var(--muted); }
+
+/* Wetter-Panel */
+.weather-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.weather-controls input[type="date"] {
+  flex: 1; background: var(--bg); border: 1px solid #3a4253; color: var(--text);
+  border-radius: 8px; padding: 7px 8px; font-size: 13px;
+}
+.weather-list li, .list .w-icon { align-items: center; }
+.w-icon { font-size: 18px; flex: 0 0 auto; width: 22px; text-align: center; }
+
 @media (max-width: 800px) {
-  .statusbar { gap: 10px; padding: 6px 10px; }
+  .app { grid-template-columns: 1fr; grid-template-rows: 44vh 1fr; }
+  .resizer { display: none; }
+  .statusbar { gap: 10px; padding: 6px 10px; flex-wrap: wrap; }
   .sb-value { font-size: 15px; }
   .sb-export { padding: 6px 10px; }
+  .elev { height: 44px; }
 }
 
 .sidebar {
@@ -232,7 +270,3 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: var(--panel-2); }
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: var(--panel-2); }
-
-@media (max-width: 800px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: 44vh 1fr; }
-}

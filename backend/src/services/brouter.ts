@@ -11,7 +11,14 @@
 
 import { config } from "../config.js";
 import { profileText } from "../resources.js";
-import type { LngLat, NoGo, ProfileName, RouteLeg } from "../types.js";
+import type {
+  ElevationSample,
+  LngLat,
+  NoGo,
+  ProfileName,
+  RouteFeaturePoint,
+  RouteLeg,
+} from "../types.js";
 
 const profileFiles: Record<ProfileName, string> = {
   fast: "moto-fast.brf",
@@ -63,6 +70,20 @@ export interface BRouterResult {
   durationS: number;
   /** Distanz/Fahrzeit je Abschnitt (Wegpunkt i -> i+1). */
   legs: RouteLeg[];
+  /** Höhenprofil (kumulierte Distanz + Höhe), heruntergerechnet. */
+  elevation: ElevationSample[];
+  /** Maut- und Fährstellen entlang der Route. */
+  features: RouteFeaturePoint[];
+}
+
+/** Eine Zeile der BRouter-„messages"-Tabelle, geparst. */
+interface SegRow {
+  lng: number;
+  lat: number;
+  ele: number;
+  /** Länge dieses Segments in Metern. */
+  dist: number;
+  wayTags: string;
 }
 
 /** Ein einzelner BRouter-Abruf für eine Punktfolge mit genau einem Profil. */
@@ -70,7 +91,12 @@ async function routeOnce(
   points: LngLat[],
   profile: ProfileName,
   nogos: NoGo[],
-): Promise<{ coords: LngLat[]; distanceM: number; durationS: number }> {
+): Promise<{
+  coords: LngLat[];
+  distanceM: number;
+  durationS: number;
+  rows: SegRow[];
+}> {
   const profileId = await ensureProfileUploaded(profile);
 
   const params = new URLSearchParams({
@@ -103,11 +129,93 @@ async function routeOnce(
   const coords: LngLat[] = (feat?.geometry?.coordinates ?? []).map(
     (c: number[]) => [c[0], c[1]] as LngLat,
   );
+
+  // „messages"-Tabelle parsen: pro Segment Höhe, Länge und WayTags.
+  const rows: SegRow[] = [];
+  const messages: any[] = Array.isArray(props.messages) ? props.messages : [];
+  if (messages.length > 1) {
+    const header: string[] = messages[0];
+    const iLng = header.indexOf("Longitude");
+    const iLat = header.indexOf("Latitude");
+    const iEle = header.indexOf("Elevation");
+    const iDist = header.indexOf("Distance");
+    const iTags = header.indexOf("WayTags");
+    for (let r = 1; r < messages.length; r++) {
+      const row = messages[r];
+      rows.push({
+        lng: Number(row[iLng]) / 1e6,
+        lat: Number(row[iLat]) / 1e6,
+        ele: Number(row[iEle]) || 0,
+        dist: Number(row[iDist]) || 0,
+        wayTags: iTags >= 0 ? String(row[iTags] ?? "") : "",
+      });
+    }
+  }
+
   return {
     coords,
     distanceM: Number(props["track-length"] ?? 0),
     durationS: Number(props["total-time"] ?? 0),
+    rows,
   };
+}
+
+/** Höhenprofil auf maximal `maxPoints` Stützstellen herunterrechnen. */
+function downsampleElevation(
+  rows: SegRow[],
+  startDist: number,
+  maxPoints: number,
+): ElevationSample[] {
+  if (rows.length === 0) return [];
+  const step = Math.max(1, Math.ceil(rows.length / maxPoints));
+  const out: ElevationSample[] = [];
+  let cum = startDist;
+  for (let i = 0; i < rows.length; i++) {
+    cum += rows[i].dist;
+    if (i % step === 0 || i === rows.length - 1) {
+      out.push({ d: Math.round(cum), e: Math.round(rows[i].ele) });
+    }
+  }
+  return out;
+}
+
+/** Maut-/Fährabschnitte aus den WayTags ableiten (zusammenhängende Segmente bündeln). */
+function extractFeatures(
+  rows: SegRow[],
+  startDist: number,
+): RouteFeaturePoint[] {
+  const out: RouteFeaturePoint[] = [];
+  let cum = startDist;
+  let cur: RouteFeaturePoint | null = null;
+  let curKind: "toll" | "ferry" | null = null;
+  for (const row of rows) {
+    const tags = row.wayTags;
+    const isFerry = /(^| )route=ferry( |$)/.test(tags);
+    const isToll = /(^| )toll(:[a-z_]+)?=yes( |$)/.test(tags);
+    const kind: "toll" | "ferry" | null = isFerry ? "ferry" : isToll ? "toll" : null;
+    if (kind && kind === curKind && cur) {
+      cur.lengthM += row.dist;
+    } else {
+      if (cur) out.push(cur);
+      cur = kind
+        ? {
+            lng: row.lng,
+            lat: row.lat,
+            kind,
+            lengthM: row.dist,
+            atM: Math.round(cum),
+            label: kind === "ferry" ? "Fähre" : "Maut",
+          }
+        : null;
+      curKind = kind;
+    }
+    cum += row.dist;
+  }
+  if (cur) out.push(cur);
+  // Sehr kurze Maut-Schnipsel (< 50 m, oft Tag-Rauschen) verwerfen.
+  return out
+    .filter((f) => f.kind === "ferry" || f.lengthM >= 50)
+    .map((f) => ({ ...f, lengthM: Math.round(f.lengthM) }));
 }
 
 /**
@@ -128,8 +236,13 @@ export async function route(
   const segCount = points.length - 1;
   const merged: LngLat[] = [];
   const legs: RouteLeg[] = [];
+  const elevation: ElevationSample[] = [];
+  const features: RouteFeaturePoint[] = [];
   let distanceM = 0;
   let durationS = 0;
+
+  // Höhenprofil insgesamt auf ~300 Punkte begrenzen, fair auf die Abschnitte verteilt.
+  const perLegPoints = Math.max(20, Math.floor(300 / segCount));
 
   for (let i = 0; i < segCount; i++) {
     const profile = profiles[i] ?? profiles[0] ?? "curvy";
@@ -138,6 +251,11 @@ export async function route(
     if (merged.length === 0) merged.push(...r.coords);
     else merged.push(...r.coords.slice(1));
     legs.push({ distanceM: r.distanceM, durationS: r.durationS });
+    // Höhenprofil + Maut/Fähren mit globalem Distanz-Offset anhängen.
+    for (const s of downsampleElevation(r.rows, distanceM, perLegPoints)) {
+      elevation.push(s);
+    }
+    for (const f of extractFeatures(r.rows, distanceM)) features.push(f);
     distanceM += r.distanceM;
     durationS += r.durationS;
   }
@@ -156,7 +274,7 @@ export async function route(
     ],
   };
 
-  return { geojson, distanceM, durationS, legs };
+  return { geojson, distanceM, durationS, legs, elevation, features };
 }
 
 /** Erzwingt Neu-Upload (z.B. nach Profiländerung im Dev-Betrieb). */

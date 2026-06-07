@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import type { Poi, Roadwork, RouteResult, Waypoint } from "../types";
+import { weatherIcon, weatherText } from "../weather";
+import type { Poi, Roadwork, RouteResult, Waypoint, WeatherPoint } from "../types";
 
 interface Props {
   waypoints: Waypoint[];
@@ -10,6 +11,7 @@ interface Props {
   avoidConstruction: boolean;
   pois: Poi[];
   selectedPois: Set<string>;
+  weather: WeatherPoint[];
   onMapClick: (lng: number, lat: number) => void;
   onTogglePoi: (poi: Poi) => void;
 }
@@ -30,6 +32,7 @@ export default function MapView(props: Props) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const popupsRef = useRef<maplibregl.Popup[]>([]);
   // aktuellste Callbacks ohne Stale-Closure
   const cbRef = useRef(props);
   cbRef.current = props;
@@ -78,7 +81,7 @@ export default function MapView(props: Props) {
 
   // Route aktualisieren + einpassen
   useEffect(syncRoute, [props.route]);
-  // Marker (Wegpunkte, Baustellen, POIs) neu aufbauen
+  // Marker (Wegpunkte, Baustellen, POIs, Maut/Fähren, Wetter) neu aufbauen
   useEffect(syncMarkers, [
     props.waypoints,
     props.roadworks,
@@ -86,6 +89,8 @@ export default function MapView(props: Props) {
     props.avoidConstruction,
     props.pois,
     props.selectedPois,
+    props.weather,
+    props.route,
   ]);
 
   function syncRoute() {
@@ -111,11 +116,30 @@ export default function MapView(props: Props) {
     }
   }
 
+  /** Popup, das beim Überfahren (Hover) des Markers erscheint. */
+  function attachHoverPopup(
+    map: maplibregl.Map,
+    el: HTMLElement,
+    lngLat: [number, number],
+    html: string,
+  ) {
+    const popup = new maplibregl.Popup({
+      offset: 14,
+      closeButton: false,
+      closeOnClick: false,
+    }).setLngLat(lngLat).setHTML(html);
+    popupsRef.current.push(popup);
+    el.addEventListener("mouseenter", () => popup.addTo(map));
+    el.addEventListener("mouseleave", () => popup.remove());
+  }
+
   function syncMarkers() {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    popupsRef.current.forEach((pp) => pp.remove());
+    popupsRef.current = [];
     const p = cbRef.current;
 
     // Wegpunkte: A, B, C ...
@@ -147,7 +171,7 @@ export default function MapView(props: Props) {
       markersRef.current.push(m);
     });
 
-    // POIs (Restaurants/Imbisse 🍴 + Tankstellen ⛽)
+    // POIs (Restaurants/Imbisse 🍴 + Tankstellen ⛽) – Info beim Hover, Klick fügt ein.
     p.pois.forEach((poi) => {
       const selected = p.selectedPois.has(poi.id);
       const isFuel = poi.category === "fuel";
@@ -163,17 +187,56 @@ export default function MapView(props: Props) {
         : `${escapeHtml(poi.kind)}${poi.cuisine ? " · " + escapeHtml(poi.cuisine) : ""}${
             poi.quality != null ? " · ★ " + poi.quality.toFixed(1) + " (OSM)" : ""
           }`;
+      attachHoverPopup(
+        map,
+        el,
+        [poi.lng, poi.lat],
+        `<b>${escapeHtml(poi.name)}</b><br>${meta}` +
+          `<br><span style="color:#9aa3b2">${poi.distance} m zur Route · klicken zum ${
+            selected ? "Entfernen" : "Hinzufügen"
+          }</span>`,
+      );
       const m = new maplibregl.Marker({ element: el })
         .setLngLat([poi.lng, poi.lat])
-        .setPopup(
-          new maplibregl.Popup({ offset: 14 }).setHTML(
-            `<b>${escapeHtml(poi.name)}</b><br>${meta}` +
-              `<br><span style="color:#9aa3b2">${poi.distance} m zur Route · klicken zum ${
-                selected ? "Entfernen" : "Hinzufügen"
-              }</span>`,
-          ),
-        )
         .addTo(map);
+      markersRef.current.push(m);
+    });
+
+    // Maut 💶 / Fähren ⛴️ entlang der Route
+    (p.route?.features ?? []).forEach((f) => {
+      const isFerry = f.kind === "ferry";
+      const el = markerEl(isFerry ? "⛴️" : "💶", isFerry ? "#6cc0ff" : "#ffcf6c", 22);
+      attachHoverPopup(
+        map,
+        el,
+        [f.lng, f.lat],
+        `<b>${isFerry ? "Fähre" : "Maut"}</b><br>` +
+          `<span style="color:#9aa3b2">Länge ${
+            f.lengthM >= 1000 ? (f.lengthM / 1000).toFixed(1) + " km" : f.lengthM + " m"
+          }</span>`,
+      );
+      const m = new maplibregl.Marker({ element: el }).setLngLat([f.lng, f.lat]).addTo(map);
+      markersRef.current.push(m);
+    });
+
+    // Wetter-Stützpunkte entlang der Route
+    p.weather.forEach((w) => {
+      const el = markerEl(weatherIcon(w.weatherCode), "#ffffff", 24);
+      el.style.fontSize = "15px";
+      const temps =
+        w.tempMin != null && w.tempMax != null
+          ? `${Math.round(w.tempMin)}–${Math.round(w.tempMax)} °C`
+          : "";
+      attachHoverPopup(
+        map,
+        el,
+        [w.lng, w.lat],
+        `<b>${weatherText(w.weatherCode)}</b><br>` +
+          `<span style="color:#9aa3b2">${temps}` +
+          `${w.precipMm != null ? " · ☔ " + w.precipMm.toFixed(1) + " mm" : ""}` +
+          `${w.windMaxKmh != null ? " · 💨 " + Math.round(w.windMaxKmh) + " km/h" : ""}</span>`,
+      );
+      const m = new maplibregl.Marker({ element: el }).setLngLat([w.lng, w.lat]).addTo(map);
       markersRef.current.push(m);
     });
   }

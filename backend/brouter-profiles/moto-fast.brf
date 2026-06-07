@@ -6,6 +6,9 @@
 
 assign turnInstructionMode = 1
 
+# Alle OSM-Tags in der Ausgabe behalten (für Maut-/Fähren-Erkennung im Backend).
+assign processUnusedTags = true
+
 ---context:way
 
 # Zugang für Kraftfahrzeuge gesperrt?

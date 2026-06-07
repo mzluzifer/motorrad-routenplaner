@@ -46,12 +46,48 @@ export interface RouteLeg {
   durationS: number;
 }
 
+export interface ElevationSample {
+  /** Kumulierte Distanz ab Start in Metern. */
+  d: number;
+  /** Höhe in Metern. */
+  e: number;
+}
+
+export interface RouteFeaturePoint {
+  lng: number;
+  lat: number;
+  kind: "toll" | "ferry";
+  lengthM: number;
+  atM: number;
+  label?: string;
+}
+
 export interface RouteResult {
   geojson: GeoJSON.FeatureCollection;
   distanceM: number;
   durationS: number;
   /** Distanz/Fahrzeit je Abschnitt (Wegpunkt i -> i+1). */
   legs?: RouteLeg[];
+  /** Höhenprofil (kumulierte Distanz + Höhe). */
+  elevation?: ElevationSample[];
+  /** Maut-/Fährstellen entlang der Route. */
+  features?: RouteFeaturePoint[];
+}
+
+export interface WeatherPoint {
+  lng: number;
+  lat: number;
+  atM: number;
+  weatherCode: number;
+  tempMax: number | null;
+  tempMin: number | null;
+  precipMm: number | null;
+  windMaxKmh: number | null;
+}
+
+export interface WeatherResult {
+  date: string;
+  points: WeatherPoint[];
 }
 
 export interface GeocodeResult {

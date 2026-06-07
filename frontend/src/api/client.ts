@@ -7,6 +7,7 @@ import type {
   ProfileName,
   Roadwork,
   RouteResult,
+  WeatherResult,
 } from "../types";
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -43,6 +44,15 @@ export function fetchPois(
   bufferM = 500,
 ): Promise<Poi[]> {
   return post<Poi[]>("/api/pois", { line, category, bufferM });
+}
+
+/** Wetter entlang der Route (Tageswerte) für ein Datum (YYYY-MM-DD, leer = heute). */
+export function fetchWeather(
+  line: LngLat[],
+  date?: string,
+  samples = 5,
+): Promise<WeatherResult> {
+  return post<WeatherResult>("/api/weather", { line, date, samples });
 }
 
 export async function geocode(q: string): Promise<GeocodeResult[]> {

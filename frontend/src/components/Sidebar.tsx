@@ -1,12 +1,14 @@
 import { useState } from "react";
 import GeoInput from "./GeoInput";
 import { fmtDistance, fmtDuration } from "../format";
+import { weatherIcon, weatherText } from "../weather";
 import type {
   Poi,
   ProfileName,
   Roadwork,
   RouteResult,
   Waypoint,
+  WeatherPoint,
 } from "../types";
 
 interface Props {
@@ -41,6 +43,13 @@ interface Props {
   fuelLoading: boolean;
   fuelError: string | null;
   onSearchFuel: () => void;
+  // Wetter
+  weatherDate: string;
+  setWeatherDate: (d: string) => void;
+  weather: WeatherPoint[];
+  weatherLoading: boolean;
+  weatherError: string | null;
+  onSearchWeather: () => void;
   onTogglePoi: (poi: Poi) => void;
   onAddWaypoint: (lng: number, lat: number, label?: string) => void;
   onRemoveWaypoint: (id: string) => void;
@@ -384,6 +393,108 @@ export default function Sidebar(p: Props) {
           </p>
         )}
       </div>
+
+      {/* Wetter entlang der Strecke */}
+      <div className="card">
+        <h2>Wetter entlang der Strecke</h2>
+        <div className="weather-controls">
+          <input
+            type="date"
+            value={p.weatherDate}
+            onChange={(e) => p.setWeatherDate(e.target.value)}
+            title="Datum (leer = heute)"
+          />
+          <button
+            className="primary"
+            onClick={p.onSearchWeather}
+            disabled={!p.route || p.weatherLoading}
+          >
+            {p.weatherLoading ? "Lädt …" : "Wetter abrufen"}
+          </button>
+        </div>
+        {p.weatherError && <p className="error">Fehler: {p.weatherError}</p>}
+        {p.weather.length > 0 ? (
+          <ul className="list weather-list">
+            {p.weather.map((w, i) => {
+              const pos =
+                i === 0
+                  ? "Start"
+                  : i === p.weather.length - 1
+                    ? "Ziel"
+                    : `bei ${fmtDistance(w.atM)}`;
+              return (
+                <li key={i}>
+                  <span className="w-icon" title={weatherText(w.weatherCode)}>
+                    {weatherIcon(w.weatherCode)}
+                  </span>
+                  <span style={{ flex: 1 }}>
+                    <b>{pos}</b> · {weatherText(w.weatherCode)}
+                    <br />
+                    <span className="muted">
+                      {w.tempMin != null && w.tempMax != null
+                        ? `${Math.round(w.tempMin)}–${Math.round(w.tempMax)} °C`
+                        : "– °C"}
+                      {w.precipMm != null ? ` · ☔ ${w.precipMm.toFixed(1)} mm` : ""}
+                      {w.windMaxKmh != null ? ` · 💨 ${Math.round(w.windMaxKmh)} km/h` : ""}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="muted">
+            Tageswetter (Open-Meteo) an mehreren Punkten der Strecke – für heute oder
+            ein gewähltes Datum (Vergangenheit & Prognose bis ~16 Tage).
+          </p>
+        )}
+      </div>
+
+      {/* Maut & Fähren */}
+      {(() => {
+        const feats = p.route?.features ?? [];
+        const ferries = feats.filter((f) => f.kind === "ferry");
+        const tolls = feats.filter((f) => f.kind === "toll");
+        return (
+          <div className="card">
+            <h2>Maut &amp; Fähren</h2>
+            {feats.length === 0 ? (
+              <p className="muted">
+                {p.route
+                  ? "Keine Maut oder Fähren auf der Route erkannt."
+                  : "Route planen, um Maut/Fähren zu sehen."}
+              </p>
+            ) : (
+              <ul className="list">
+                {ferries.map((f, i) => (
+                  <li key={`fy${i}`}>
+                    <span className="w-icon">⛴️</span>
+                    <span style={{ flex: 1 }}>
+                      Fähre
+                      <br />
+                      <span className="muted">
+                        bei {fmtDistance(f.atM)} · {fmtDistance(f.lengthM)} Überfahrt
+                      </span>
+                    </span>
+                  </li>
+                ))}
+                {tolls.map((f, i) => (
+                  <li key={`tl${i}`}>
+                    <span className="w-icon">💶</span>
+                    <span style={{ flex: 1 }}>
+                      Maut
+                      <br />
+                      <span className="muted">
+                        bei {fmtDistance(f.atM)} · {fmtDistance(f.lengthM)} mautpflichtig
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })()}
     </aside>
   );
 }
