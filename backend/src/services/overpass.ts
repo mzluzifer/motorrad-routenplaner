@@ -5,37 +5,75 @@ import type { LngLat, Poi, Roadwork } from "../types.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Overpass-Abfrage mit Backoff-Retry. Die öffentlichen Instanzen liefern bei
- * Last häufig 429/504 – ein kurzer Wiederholungsversuch ist meist erfolgreich.
- */
-async function overpass(query: string, attempt = 0): Promise<any> {
+// Zeitlimit pro Versuch: Overpass-Abfragen dürfen dauern, ein hängender Server
+// soll aber nicht ewig blockieren, sondern auf die nächste Instanz wechseln.
+const ATTEMPT_TIMEOUT_MS = 45_000;
+
+// Zuletzt erfolgreiche Instanz zuerst probieren (spart das Timeout einer
+// dauerhaft nicht erreichbaren Primärinstanz bei jeder Folgeanfrage).
+let lastGood = 0;
+
+/** Eine einzelne Overpass-Instanz abfragen (mit Zeitlimit + 429/504-Retry). */
+async function overpassOnce(
+  url: string,
+  query: string,
+  attempt = 0,
+): Promise<any> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(config.overpassUrl, {
+    res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": userAgent,
       },
       body: `data=${encodeURIComponent(query)}`,
+      signal: ctrl.signal,
     });
-  } catch (err) {
-    if (attempt < 2) {
-      await sleep(1500 * (attempt + 1));
-      return overpass(query, attempt + 1);
-    }
-    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  // Bei Überlastung kurz warten und erneut versuchen.
-  if ((res.status === 429 || res.status === 504) && attempt < 2) {
+  // Bei Überlastung kurz warten und erneut versuchen (gleiche Instanz).
+  if ((res.status === 429 || res.status === 504) && attempt < 1) {
     await sleep(1500 * (attempt + 1));
-    return overpass(query, attempt + 1);
+    return overpassOnce(url, query, attempt + 1);
   }
   if (!res.ok) {
-    throw new Error(`Overpass fehlgeschlagen (${res.status}): ${await res.text()}`);
+    throw new Error(`Overpass ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
   return res.json();
+}
+
+/**
+ * Overpass-Abfrage über mehrere Instanzen: schlägt eine fehl oder ist nicht
+ * erreichbar, wird die nächste versucht. Die öffentliche Hauptinstanz ist je nach
+ * Netzwerk/Last nicht immer erreichbar – darum die Fallback-Kette.
+ */
+async function overpass(query: string): Promise<any> {
+  const urls = config.overpassUrls;
+  // Reihenfolge: zuletzt erfolgreiche Instanz zuerst, dann der Rest.
+  const order = [
+    lastGood,
+    ...urls.map((_, i) => i).filter((i) => i !== lastGood),
+  ];
+  let lastErr: unknown;
+  for (const idx of order) {
+    try {
+      const data = await overpassOnce(urls[idx], query);
+      lastGood = idx;
+      return data;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  const msg =
+    lastErr instanceof Error ? lastErr.message : String(lastErr ?? "unbekannt");
+  throw new Error(
+    `Kartendaten-Dienst (Overpass) gerade nicht erreichbar – bitte in ein paar ` +
+      `Minuten erneut versuchen. (${msg})`,
+  );
 }
 
 /** Mittelpunkt eines Overpass-Elements (node oder way/relation mit center). */

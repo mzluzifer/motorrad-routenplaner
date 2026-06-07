@@ -26,7 +26,8 @@ app.post<{ Body: RouteRequest }>("/api/route", async (req, reply) => {
   if (!Array.isArray(points) || points.length < 2) {
     return reply.code(400).send({ error: "Mindestens zwei Punkte nötig." });
   }
-  const norm = (p: unknown): ProfileName => (p === "fast" ? "fast" : "curvy");
+  const norm = (p: unknown): ProfileName =>
+    p === "fast" ? "fast" : p === "autobahn" ? "autobahn" : "curvy";
   // Abschnittsprofile haben Vorrang; sonst einheitliches Profil auf alle Abschnitte.
   const profs: ProfileName[] =
     Array.isArray(profiles) && profiles.length

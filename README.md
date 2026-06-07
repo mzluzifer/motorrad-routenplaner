@@ -3,12 +3,13 @@
 Open-Source Web-App zum Planen von Motorradtouren: Route von A nach B (optional als
 Rundtour), beliebig viele Zwischenziele – per **Eingabefeld** (Adresse/Ort tippen)
 oder Karten-Klick gesetzt, Start optional per **aktuellem Standort**. Profil
-**Schnell / Kurvig** wahlweise global **oder pro Abschnitt** zwischen zwei Wegpunkten
-(Kurvig meidet Städte & Dörfer), Vermeidung aktueller **Baustellen** (einzeln
-übersteuerbar), Auswahl von **Restaurants/Imbissen und Tankstellen** entlang der
-Strecke und **GPX-Export** für Navi/Handy (OsmAnd, Calimoto, Garmin …). Distanz,
-Fahrzeit und Export liegen in einer **Statusleiste unter der Karte**. Große, zoombare
-Karte.
+**Schnell / Kurvig / Autobahn** wahlweise global **oder pro Abschnitt** zwischen zwei
+Wegpunkten (Kurvig meidet Städte & Dörfer, Autobahn ist am schnellsten); **Distanz und
+Fahrzeit je Teilstrecke** werden direkt am Wegpunkt angezeigt. Vermeidung aktueller
+**Baustellen** (einklappbares Menü, einzeln übersteuerbar), Auswahl von
+**Restaurants/Imbissen und Tankstellen** entlang der Strecke und **GPX-Export** für
+Navi/Handy (OsmAnd, Calimoto, Garmin …). Gesamt-Distanz, Fahrzeit und Export liegen in
+einer **Statusleiste unter der Karte**. Große, zoombare Karte.
 
 Alles basiert auf Open-Source-Bausteinen und offenen Daten (OpenStreetMap, BRouter,
 MapLibre, OpenFreeMap, Overpass, Nominatim, Autobahn-GmbH-API).
@@ -112,6 +113,8 @@ Die Profile liegen als BRouter-Dateien in `backend/brouter-profiles/`:
 - **`moto-curvy.brf`** – bevorzugt kurvige Land-/Nebenstraßen, niedrige Abbiegekosten,
   und **meidet Ortschaften** über hohe Kosten für `residential` / `living_street` /
   `service`. So führt die Route nicht durch Dörfer, nur weil es dort kurvig aussieht.
+- **`moto-autobahn.brf`** – Autobahn/Schnellstraße klar bevorzugt, kleinere Straßen nur
+  als Zubringer. Für die schnellstmögliche Verbindung.
 
 Die Zahlenwerte sind bewusst einfach gehalten und können in den `.brf`-Dateien
 nachjustiert werden. Das Backend lädt das jeweilige Profil automatisch zum
@@ -119,10 +122,10 @@ BRouter-Server hoch und referenziert es beim Routing.
 
 **Profil pro Abschnitt:** In der App lässt sich das Profil nicht nur global (als
 Vorgabe für alle Teilstrecken) setzen, sondern zwischen je zwei Wegpunkten einzeln
-auf ⚡ Schnell oder 🌀 Kurvig stellen. Das Backend bündelt aufeinanderfolgende
-Abschnitte gleichen Profils, routet sie über BRouter und fügt die Teilstücke zu
-einem durchgehenden Track zusammen (auch der Rückweg bei Rundtour ist eigen
-einstellbar).
+auf ⚡ Schnell, 🌀 Kurvig oder 🛣️ Autobahn stellen. Das Backend routet jeden Abschnitt
+einzeln über BRouter, fügt die Teilstücke zu einem durchgehenden Track zusammen und
+liefert dabei **Distanz und Fahrzeit je Teilstrecke** (auch der Rückweg bei Rundtour
+ist eigen einstellbar). Die Werte erscheinen direkt am jeweiligen Wegpunkt.
 
 ## Baustellen
 
@@ -132,9 +135,10 @@ einstellbar).
 - **OSM/Overpass** (`highway=construction`) – auch Land-/Nebenstraßen, Datenlage
   jedoch lückenhaft und nicht immer top-aktuell (per Schalter abschaltbar).
 
-In der App: globaler Schalter **„Baustellen meiden"** plus pro Baustelle ein Häkchen,
-um einzelne Baustellen doch zu befahren. Aktive Baustellen werden als BRouter-`nogo`
-übergeben, sodass die Route außen herum führt.
+In der App: ein **einklappbares Baustellen-Menü** mit globalem Schalter
+**„Baustellen meiden"** plus pro Baustelle ein Häkchen, um einzelne Baustellen doch zu
+befahren. Aktive Baustellen werden als BRouter-`nogo` übergeben, sodass die Route außen
+herum führt.
 
 ## Einkehr (Restaurants/Imbisse) & Tankstellen
 
@@ -163,7 +167,7 @@ Seitenleiste.
 |-----------------|---------------------------------------------|---------|
 | `PORT`          | Backend-Port                                | `8080` |
 | `BROUTER_URL`   | BRouter-Endpunkt                            | `http://localhost:17777/brouter` |
-| `OVERPASS_URL`  | Overpass-API                                | `https://overpass-api.de/api/interpreter` |
+| `OVERPASS_URL`  | Overpass-API (kommt in der Fallback-Kette zuerst) | `https://overpass-api.de/api/interpreter` |
 | `NOMINATIM_URL` | Geocoding                                   | `https://nominatim.openstreetmap.org` |
 | `AUTOBAHN_URL`  | Autobahn-GmbH-API                           | `https://verkehr.autobahn.de/o/autobahn` |
 | `CONTACT_EMAIL` | Kontakt im User-Agent (Fair-Use)            | – |
@@ -174,6 +178,12 @@ Seitenleiste.
 > **Fair-Use:** Die öffentlichen Overpass-/Nominatim-Instanzen haben Nutzungslimits.
 > Für regelmäßige/intensive Nutzung später eigene Instanzen hosten und die URLs
 > in der `.env` anpassen.
+
+> **Overpass-Ausfallsicherheit:** Die POI-/Tankstellen- und OSM-Baustellen-Abfragen
+> laufen über eine **Fallback-Kette** mehrerer öffentlicher Overpass-Server. Ist einer
+> nicht erreichbar oder überlastet, wird automatisch der nächste versucht; der zuletzt
+> erfolgreiche wird bevorzugt. Sind ausnahmsweise alle überlastet, kommt eine klare
+> Meldung statt eines kryptischen „fetch failed".
 
 ## Tech-Stack
 

@@ -1,0 +1,46 @@
+# Motorrad-Profil "AUTOBAHN" für BRouter.
+# Ziel: schnellstmöglich, Autobahn/Schnellstraßen klar bevorzugt.
+# Kleinere Straßen nur als Zubringer zur Autobahn nutzen.
+
+---context:global
+
+assign turnInstructionMode = 1
+
+---context:way
+
+# Zugang für Kraftfahrzeuge gesperrt?
+assign access_forbidden =
+  or access=private|no
+  or motor_vehicle=private|no
+  motorcar=private|no
+
+# Grundkosten pro Straßenklasse (kleiner = bevorzugt).
+# Autobahn/Schnellstraße sehr günstig, kleine Straßen progressiv teurer,
+# damit die Route wo möglich auf der Autobahn bleibt.
+assign roadcost =
+  switch access_forbidden                  10000
+  switch highway=motorway|motorway_link    1.0
+  switch highway=trunk|trunk_link          1.1
+  switch highway=primary|primary_link      1.8
+  switch highway=secondary|secondary_link  3.0
+  switch highway=tertiary|tertiary_link    4.5
+  switch highway=unclassified              6.0
+  switch highway=residential               7.0
+  switch highway=living_street             12.0
+  switch highway=service                   12.0
+  switch or highway=track or highway=path or highway=footway highway=cycleway  10000
+  5.0
+
+assign costfactor = roadcost
+
+# Auf Autobahnen gibt es kaum Abbiegungen -> Zickzack stark bestrafen.
+assign turncost = 120
+assign initialcost = 0
+
+---context:node
+
+# Sperren/Barrieren als nicht passierbar werten
+assign initialcost =
+  switch or barrier=gate or barrier=bollard or barrier=block barrier=lift_gate
+  10000
+  0

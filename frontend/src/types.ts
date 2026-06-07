@@ -1,5 +1,5 @@
 export type LngLat = [number, number];
-export type ProfileName = "fast" | "curvy";
+export type ProfileName = "fast" | "curvy" | "autobahn";
 
 export interface Waypoint {
   id: string;
@@ -41,10 +41,17 @@ export interface Poi {
   verified: boolean;
 }
 
+export interface RouteLeg {
+  distanceM: number;
+  durationS: number;
+}
+
 export interface RouteResult {
   geojson: GeoJSON.FeatureCollection;
   distanceM: number;
   durationS: number;
+  /** Distanz/Fahrzeit je Abschnitt (Wegpunkt i -> i+1). */
+  legs?: RouteLeg[];
 }
 
 export interface GeocodeResult {

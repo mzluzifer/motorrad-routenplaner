@@ -1,4 +1,6 @@
+import { useState } from "react";
 import GeoInput from "./GeoInput";
+import { fmtDistance, fmtDuration } from "../format";
 import type {
   Poi,
   ProfileName,
@@ -48,6 +50,13 @@ interface Props {
 
 const letter = (i: number) => String.fromCharCode(65 + i);
 
+/** Die wählbaren Profile mit Symbol/Beschriftung (für Vorgabe + Abschnitt). */
+const PROFILES: { id: ProfileName; icon: string; label: string; title: string }[] = [
+  { id: "fast", icon: "⚡", label: "Schnell", title: "Schnell (zügige Straßen)" },
+  { id: "curvy", icon: "🌀", label: "Kurvig", title: "Kurvig (Ortschaften meiden)" },
+  { id: "autobahn", icon: "🛣️", label: "Autobahn", title: "Autobahn bevorzugen (am schnellsten)" },
+];
+
 /** OSM-Qualität als Sterne (0–5) darstellen. */
 function stars(q: number): string {
   const full = Math.round(q);
@@ -55,6 +64,8 @@ function stars(q: number): string {
 }
 
 export default function Sidebar(p: Props) {
+  // Baustellen-Karte einklappbar (spart Platz bei vielen Einträgen).
+  const [roadworksOpen, setRoadworksOpen] = useState(false);
   return (
     <aside className="sidebar">
       <h1>🏍️ Routenplaner</h1>
@@ -122,24 +133,30 @@ export default function Sidebar(p: Props) {
                 </div>
                 {hasSegment && (
                   <div className="seg-connector">
-                    <span className="seg-leg">
-                      {letter(i)}→{toLetter}
-                    </span>
+                    <div className="seg-head">
+                      <span className="seg-leg">
+                        {letter(i)}→{toLetter}
+                      </span>
+                      {(() => {
+                        const leg = p.route?.legs?.[i];
+                        return leg ? (
+                          <span className="seg-stats">
+                            {fmtDistance(leg.distanceM)} · {fmtDuration(leg.durationS)}
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                     <div className="seg seg-mini">
-                      <button
-                        className={segProfile === "fast" ? "active" : ""}
-                        title="Schnell (auch Autobahn)"
-                        onClick={() => p.setSegmentProfile(w.id, "fast")}
-                      >
-                        ⚡
-                      </button>
-                      <button
-                        className={segProfile === "curvy" ? "active" : ""}
-                        title="Kurvig (Ortschaften meiden)"
-                        onClick={() => p.setSegmentProfile(w.id, "curvy")}
-                      >
-                        🌀
-                      </button>
+                      {PROFILES.map((pr) => (
+                        <button
+                          key={pr.id}
+                          className={segProfile === pr.id ? "active" : ""}
+                          title={pr.title}
+                          onClick={() => p.setSegmentProfile(w.id, pr.id)}
+                        >
+                          {pr.icon}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -180,71 +197,84 @@ export default function Sidebar(p: Props) {
       <div className="card">
         <h2>Routenprofil (Vorgabe)</h2>
         <div className="seg">
-          <button
-            className={p.profile === "fast" ? "active" : ""}
-            onClick={() => p.setProfile("fast")}
-          >
-            ⚡ Schnell
-          </button>
-          <button
-            className={p.profile === "curvy" ? "active" : ""}
-            onClick={() => p.setProfile("curvy")}
-          >
-            🌀 Kurvig
-          </button>
+          {PROFILES.map((pr) => (
+            <button
+              key={pr.id}
+              className={p.profile === pr.id ? "active" : ""}
+              title={pr.title}
+              onClick={() => p.setProfile(pr.id)}
+            >
+              {pr.icon} {pr.label}
+            </button>
+          ))}
         </div>
         <p className="muted">
           Setzt das Profil für <b>alle</b> Abschnitte. Einzelne Abschnitte lassen sich
-          oben pro Teilstrecke auf ⚡/🌀 umstellen. Kurvig bevorzugt Landstraßen und
-          meidet Städte &amp; Dörfer.
+          oben pro Teilstrecke auf ⚡/🌀/🛣️ umstellen. Kurvig bevorzugt Landstraßen und
+          meidet Städte &amp; Dörfer; Autobahn ist am schnellsten.
         </p>
       </div>
 
-      {/* Baustellen */}
+      {/* Baustellen (einklappbar) */}
       <div className="card">
-        <h2>Baustellen</h2>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={p.avoidConstruction}
-            onChange={(e) => p.setAvoidConstruction(e.target.checked)}
-          />
-          Baustellen meiden
-        </label>
-        <label className="toggle" style={{ marginTop: 6 }}>
-          <input
-            type="checkbox"
-            checked={p.includeOsm}
-            onChange={(e) => p.setIncludeOsm(e.target.checked)}
-          />
-          Auch OSM-Baustellen (Land-/Nebenstraßen)
-        </label>
-        {p.roadworks.length === 0 ? (
-          <p className="muted">Keine Baustellen im Routenbereich gefunden.</p>
-        ) : (
-          <ul className="list">
-            {p.roadworks.map((rw) => {
-              const active = p.avoidConstruction && !p.disabledRoadworks.has(rw.id);
-              return (
-                <li key={rw.id}>
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    disabled={!p.avoidConstruction}
-                    onChange={() => p.toggleRoadwork(rw.id)}
-                    title="diese Baustelle meiden"
-                  />
-                  <span style={{ flex: 1 }}>
-                    {rw.title}
-                    <br />
-                    <span className="muted">{rw.source.toUpperCase()}</span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+        <button
+          className="card-toggle"
+          onClick={() => setRoadworksOpen((o) => !o)}
+          aria-expanded={roadworksOpen}
+        >
+          <span className="card-toggle-caret">{roadworksOpen ? "▾" : "▸"}</span>
+          <span className="card-toggle-title">Baustellen</span>
+          <span className="card-toggle-meta">
+            {p.avoidConstruction ? "meiden an" : "meiden aus"}
+            {p.roadworks.length > 0 ? ` · ${p.roadworks.length}` : ""}
+          </span>
+        </button>
+        {roadworksOpen && (
+          <div className="card-body">
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={p.avoidConstruction}
+                onChange={(e) => p.setAvoidConstruction(e.target.checked)}
+              />
+              Baustellen meiden
+            </label>
+            <label className="toggle" style={{ marginTop: 6 }}>
+              <input
+                type="checkbox"
+                checked={p.includeOsm}
+                onChange={(e) => p.setIncludeOsm(e.target.checked)}
+              />
+              Auch OSM-Baustellen (Land-/Nebenstraßen)
+            </label>
+            {p.roadworks.length === 0 ? (
+              <p className="muted">Keine Baustellen im Routenbereich gefunden.</p>
+            ) : (
+              <ul className="list">
+                {p.roadworks.map((rw) => {
+                  const active = p.avoidConstruction && !p.disabledRoadworks.has(rw.id);
+                  return (
+                    <li key={rw.id}>
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        disabled={!p.avoidConstruction}
+                        onChange={() => p.toggleRoadwork(rw.id)}
+                        title="diese Baustelle meiden"
+                      />
+                      <span style={{ flex: 1 }}>
+                        {rw.title}
+                        <br />
+                        <span className="muted">{rw.source.toUpperCase()}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="muted">Häkchen entfernen, um einzelne Baustellen doch zu befahren.</p>
+          </div>
         )}
-        <p className="muted">Häkchen entfernen, um einzelne Baustellen doch zu befahren.</p>
       </div>
 
       {/* Restaurants/Imbisse */}

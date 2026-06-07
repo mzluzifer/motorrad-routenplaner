@@ -28,6 +28,19 @@ export const config = {
     process.env.BROUTER_URL ??
     (packaged ? "https://brouter.de/brouter" : "http://localhost:17777/brouter"),
   overpassUrl: process.env.OVERPASS_URL ?? "https://overpass-api.de/api/interpreter",
+  // Mehrere Overpass-Instanzen als Fallback: schlägt eine fehl/ist nicht erreichbar,
+  // wird die nächste versucht. Eine per OVERPASS_URL gesetzte kommt zuerst.
+  overpassUrls: (() => {
+    const defaults = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://overpass.private.coffee/api/interpreter",
+    ];
+    const custom = process.env.OVERPASS_URL;
+    if (!custom) return defaults;
+    // Eigene URL nach vorne, Duplikate raus.
+    return [custom, ...defaults.filter((u) => u !== custom)];
+  })(),
   nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",
   autobahnUrl: process.env.AUTOBAHN_URL ?? "https://verkehr.autobahn.de/o/autobahn",
   contactEmail: process.env.CONTACT_EMAIL ?? "",

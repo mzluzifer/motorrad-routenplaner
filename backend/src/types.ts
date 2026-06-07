@@ -4,7 +4,7 @@
 export type LngLat = [number, number];
 
 /** Routenprofil. */
-export type ProfileName = "fast" | "curvy";
+export type ProfileName = "fast" | "curvy" | "autobahn";
 
 /** Eine zu meidende Zone (Baustelle), die als BRouter-nogo dient. */
 export interface NoGo {
@@ -24,6 +24,12 @@ export interface RouteRequest {
   profiles?: ProfileName[];
   /** Aktive Baustellen-Sperrzonen (nur die vom Nutzer aktiv gelassenen). */
   nogos?: NoGo[];
+}
+
+/** Distanz/Fahrzeit eines einzelnen Abschnitts (Wegpunkt i -> i+1). */
+export interface RouteLeg {
+  distanceM: number;
+  durationS: number;
 }
 
 /** Eine normalisierte Baustelle. */

@@ -11,11 +11,12 @@
 
 import { config } from "../config.js";
 import { profileText } from "../resources.js";
-import type { LngLat, NoGo, ProfileName } from "../types.js";
+import type { LngLat, NoGo, ProfileName, RouteLeg } from "../types.js";
 
 const profileFiles: Record<ProfileName, string> = {
   fast: "moto-fast.brf",
   curvy: "moto-curvy.brf",
+  autobahn: "moto-autobahn.brf",
 };
 
 // Cache: Profilname -> hochgeladene custom-Profil-ID.
@@ -60,6 +61,8 @@ export interface BRouterResult {
   distanceM: number;
   /** Geschätzte Fahrzeit in Sekunden. */
   durationS: number;
+  /** Distanz/Fahrzeit je Abschnitt (Wegpunkt i -> i+1). */
+  legs: RouteLeg[];
 }
 
 /** Ein einzelner BRouter-Abruf für eine Punktfolge mit genau einem Profil. */
@@ -109,8 +112,9 @@ async function routeOnce(
 
 /**
  * Routet über die Wegpunkte. `profiles` legt je Abschnitt (points[i] -> points[i+1])
- * das Profil fest. Aufeinanderfolgende Abschnitte mit gleichem Profil werden zu einer
- * einzigen BRouter-Anfrage gebündelt; das Ergebnis wird zu einem Track zusammengefügt.
+ * das Profil fest. Jeder Abschnitt wird einzeln über BRouter geroutet, damit Distanz
+ * und Fahrzeit pro Teilstrecke vorliegen; die Teilstücke werden zu einem durchgehenden
+ * Track zusammengefügt.
  */
 export async function route(
   points: LngLat[],
@@ -122,30 +126,18 @@ export async function route(
   }
 
   const segCount = points.length - 1;
-  const profs: ProfileName[] = [];
-  for (let i = 0; i < segCount; i++) {
-    profs.push(profiles[i] ?? profiles[0] ?? "curvy");
-  }
-
-  // Aufeinanderfolgende Abschnitte gleichen Profils bündeln.
-  const groups: { profile: ProfileName; pts: LngLat[] }[] = [];
-  for (let i = 0; i < segCount; i++) {
-    const last = groups[groups.length - 1];
-    if (last && last.profile === profs[i]) {
-      last.pts.push(points[i + 1]);
-    } else {
-      groups.push({ profile: profs[i], pts: [points[i], points[i + 1]] });
-    }
-  }
-
   const merged: LngLat[] = [];
+  const legs: RouteLeg[] = [];
   let distanceM = 0;
   let durationS = 0;
-  for (const g of groups) {
-    const r = await routeOnce(g.pts, g.profile, nogos);
-    // Am Übergang den doppelten Punkt weglassen.
+
+  for (let i = 0; i < segCount; i++) {
+    const profile = profiles[i] ?? profiles[0] ?? "curvy";
+    const r = await routeOnce([points[i], points[i + 1]], profile, nogos);
+    // Am Übergang den doppelten Punkt (Wegpunkt) weglassen.
     if (merged.length === 0) merged.push(...r.coords);
     else merged.push(...r.coords.slice(1));
+    legs.push({ distanceM: r.distanceM, durationS: r.durationS });
     distanceM += r.distanceM;
     durationS += r.durationS;
   }
@@ -164,7 +156,7 @@ export async function route(
     ],
   };
 
-  return { geojson, distanceM, durationS };
+  return { geojson, distanceM, durationS, legs };
 }
 
 /** Erzwingt Neu-Upload (z.B. nach Profiländerung im Dev-Betrieb). */
