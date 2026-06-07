@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import Sidebar from "./components/Sidebar";
+import StatusBar from "./components/StatusBar";
 import {
+  downloadGpx,
   fetchPois,
   fetchRoadworks,
   fetchRoute,
@@ -49,6 +51,14 @@ export default function App() {
   const [pois, setPois] = useState<Poi[]>([]);
   const [selectedPois, setSelectedPois] = useState<Set<string>>(new Set());
   const [poiLoading, setPoiLoading] = useState(false);
+  // Mindest-OSM-Qualität für Essen (Annäherung an „mind. 4,5 Sterne"; keine echten
+  // Google-Sterne, sondern aus Tag-Vollständigkeit – offene Daten haben keine Ratings).
+  const [minQuality, setMinQuality] = useState(4.5);
+  const [poiError, setPoiError] = useState<string | null>(null);
+
+  const [fuelPois, setFuelPois] = useState<Poi[]>([]);
+  const [fuelLoading, setFuelLoading] = useState(false);
+  const [fuelError, setFuelError] = useState<string | null>(null);
 
   // Effektive Punktliste fürs Routing (inkl. Rückweg bei Rundtour).
   const effectivePoints = useMemo<LngLat[]>(() => {
@@ -196,19 +206,37 @@ export default function App() {
       return next;
     });
 
-  // --- POIs (Restaurants/Imbisse) ---
+  // --- POIs (Restaurants/Imbisse + Tankstellen) ---
   const searchPois = async () => {
     const line = routeLine(route);
     if (line.length < 2) return;
     setPoiLoading(true);
+    setPoiError(null);
     try {
-      setPois(await fetchPois(line, 500));
+      setPois(await fetchPois(line, "food", 500));
+    } catch (e: any) {
+      setPoiError(e.message ?? String(e));
     } finally {
       setPoiLoading(false);
     }
   };
 
+  const searchFuel = async () => {
+    const line = routeLine(route);
+    if (line.length < 2) return;
+    setFuelLoading(true);
+    setFuelError(null);
+    try {
+      setFuelPois(await fetchPois(line, "fuel", 500));
+    } catch (e: any) {
+      setFuelError(e.message ?? String(e));
+    } finally {
+      setFuelLoading(false);
+    }
+  };
+
   const togglePoi = (poi: Poi) => {
+    const icon = poi.category === "fuel" ? "⛽" : "🍴";
     setSelectedPois((s) => {
       const next = new Set(s);
       if (next.has(poi.id)) {
@@ -223,7 +251,7 @@ export default function App() {
             id: `poi-${poi.id}`,
             lng: poi.lng,
             lat: poi.lat,
-            label: `🍴 ${poi.name}`,
+            label: `${icon} ${poi.name}`,
             profile: defaultProfile,
           };
           return [...w.slice(0, insertAt), wp, ...w.slice(insertAt)];
@@ -231,6 +259,25 @@ export default function App() {
       }
       return next;
     });
+  };
+
+  // Essen nach OSM-Qualität gefiltert (verifiziert + >= Schwelle).
+  const filteredFood = useMemo(
+    () => pois.filter((p) => p.verified && (p.quality ?? 0) >= minQuality),
+    [pois, minQuality],
+  );
+  // Alle Marker für die Karte: gefiltertes Essen + Tankstellen.
+  const mapPois = useMemo(
+    () => [...filteredFood, ...fuelPois],
+    [filteredFood, fuelPois],
+  );
+
+  // --- GPX-Export (für die Statusleiste unter der Karte) ---
+  const exportGpx = () => {
+    const track = routeLine(route);
+    if (track.length < 2) return;
+    const wpts = waypoints.map((w) => ({ lng: w.lng, lat: w.lat, name: w.label }));
+    downloadGpx(track, wpts);
   };
 
   return (
@@ -253,12 +300,18 @@ export default function App() {
         disabledRoadworks={disabledRoadworks}
         toggleRoadwork={toggleRoadwork}
         route={route}
-        routeLoading={routeLoading}
-        routeError={routeError}
-        pois={pois}
+        pois={filteredFood}
+        foodTotal={pois.length}
         selectedPois={selectedPois}
         poiLoading={poiLoading}
+        poiError={poiError}
         onSearchPois={searchPois}
+        minQuality={minQuality}
+        setMinQuality={setMinQuality}
+        fuelPois={fuelPois}
+        fuelLoading={fuelLoading}
+        fuelError={fuelError}
+        onSearchFuel={searchFuel}
         onTogglePoi={togglePoi}
         onAddWaypoint={addWaypoint}
         onRemoveWaypoint={removeWaypoint}
@@ -267,19 +320,28 @@ export default function App() {
           setWaypoints([]);
           setSelectedPois(new Set());
           setPois([]);
+          setFuelPois([]);
         }}
       />
-      <MapView
-        waypoints={waypoints}
-        route={route}
-        roadworks={roadworks}
-        disabledRoadworks={disabledRoadworks}
-        avoidConstruction={avoidConstruction}
-        pois={pois}
-        selectedPois={selectedPois}
-        onMapClick={(lng, lat) => addWaypoint(lng, lat)}
-        onTogglePoi={togglePoi}
-      />
+      <div className="main">
+        <MapView
+          waypoints={waypoints}
+          route={route}
+          roadworks={roadworks}
+          disabledRoadworks={disabledRoadworks}
+          avoidConstruction={avoidConstruction}
+          pois={mapPois}
+          selectedPois={selectedPois}
+          onMapClick={(lng, lat) => addWaypoint(lng, lat)}
+          onTogglePoi={togglePoi}
+        />
+        <StatusBar
+          route={route}
+          routeLoading={routeLoading}
+          routeError={routeError}
+          onExportGpx={exportGpx}
+        />
+      </div>
     </div>
   );
 }

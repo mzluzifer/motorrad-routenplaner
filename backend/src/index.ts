@@ -87,15 +87,17 @@ app.post<{ Body: { points: LngLat[]; includeOsm?: boolean } }>(
 );
 
 // --- POIs (Restaurants/Imbisse) -------------------------------------------
-app.post<{ Body: { line: LngLat[]; bufferM?: number } }>(
+app.post<{
+  Body: { line: LngLat[]; bufferM?: number; category?: "food" | "fuel" | "all" };
+}>(
   "/api/pois",
   async (req, reply) => {
-    const { line, bufferM = 500 } = req.body ?? { line: [] };
+    const { line, bufferM = 500, category = "food" } = req.body ?? { line: [] };
     if (!Array.isArray(line) || line.length < 2) {
       return reply.code(400).send({ error: "Routen-Geometrie fehlt." });
     }
     try {
-      return await findPois(line, bufferM);
+      return await findPois(line, { bufferM, category });
     } catch (err: any) {
       req.log.error(err);
       return reply.code(502).send({ error: String(err.message ?? err) });

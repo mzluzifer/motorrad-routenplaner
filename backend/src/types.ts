@@ -38,14 +38,24 @@ export interface Roadwork {
   radius: number;
 }
 
-/** Ein POI (Restaurant/Imbiss) entlang der Strecke. */
+/** Ein POI (Restaurant/Imbiss oder Tankstelle) entlang der Strecke. */
 export interface Poi {
   id: string;
   lat: number;
   lng: number;
   name: string;
-  kind: string; // restaurant | fast_food | cafe
+  kind: string; // restaurant | fast_food | cafe | fuel
+  /** Grobe Kategorie für UI/Marker. */
+  category: "food" | "fuel";
   cuisine?: string;
+  brand?: string;
   /** Distanz zur Route in Metern. */
   distance: number;
+  /**
+   * OSM-Qualität 0–5 (nur für Essen): aus der Vollständigkeit der OSM-Tags
+   * abgeleitet – KEINE echten Nutzer-/Google-Sterne (die gibt es offen nicht).
+   */
+  quality?: number;
+  /** Hat genug verlässliche OSM-Metadaten, um als „real/verifiziert" zu gelten. */
+  verified: boolean;
 }

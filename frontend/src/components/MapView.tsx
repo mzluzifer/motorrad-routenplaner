@@ -147,23 +147,30 @@ export default function MapView(props: Props) {
       markersRef.current.push(m);
     });
 
-    // POIs (Restaurants/Imbisse)
+    // POIs (Restaurants/Imbisse 🍴 + Tankstellen ⛽)
     p.pois.forEach((poi) => {
       const selected = p.selectedPois.has(poi.id);
-      const el = markerEl("🍴", selected ? "#18a0ff" : "#ffd24a", 22);
+      const isFuel = poi.category === "fuel";
+      const icon = isFuel ? "⛽" : "🍴";
+      const baseColor = isFuel ? "#7ad1a0" : "#ffd24a";
+      const el = markerEl(icon, selected ? "#18a0ff" : baseColor, 22);
       el.addEventListener("click", (ev) => {
         ev.stopPropagation();
         cbRef.current.onTogglePoi(poi);
       });
+      const meta = isFuel
+        ? `${poi.brand ? escapeHtml(poi.brand) : "Tankstelle"}`
+        : `${escapeHtml(poi.kind)}${poi.cuisine ? " · " + escapeHtml(poi.cuisine) : ""}${
+            poi.quality != null ? " · ★ " + poi.quality.toFixed(1) + " (OSM)" : ""
+          }`;
       const m = new maplibregl.Marker({ element: el })
         .setLngLat([poi.lng, poi.lat])
         .setPopup(
           new maplibregl.Popup({ offset: 14 }).setHTML(
-            `<b>${escapeHtml(poi.name)}</b><br>${escapeHtml(poi.kind)}${
-              poi.cuisine ? " · " + escapeHtml(poi.cuisine) : ""
-            }<br><span style="color:#9aa3b2">${poi.distance} m zur Route · klicken zum ${
-              selected ? "Entfernen" : "Hinzufügen"
-            }</span>`,
+            `<b>${escapeHtml(poi.name)}</b><br>${meta}` +
+              `<br><span style="color:#9aa3b2">${poi.distance} m zur Route · klicken zum ${
+                selected ? "Entfernen" : "Hinzufügen"
+              }</span>`,
           ),
         )
         .addTo(map);

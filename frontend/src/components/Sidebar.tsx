@@ -1,6 +1,4 @@
 import GeoInput from "./GeoInput";
-import { downloadGpx } from "../api/client";
-import { routeLine } from "../App";
 import type {
   Poi,
   ProfileName,
@@ -27,12 +25,20 @@ interface Props {
   disabledRoadworks: Set<string>;
   toggleRoadwork: (id: string) => void;
   route: RouteResult | null;
-  routeLoading: boolean;
-  routeError: string | null;
+  // Essen (bereits nach Qualität gefiltert) + Gesamtzahl gefundener Treffer
   pois: Poi[];
+  foodTotal: number;
+  minQuality: number;
+  setMinQuality: (q: number) => void;
   selectedPois: Set<string>;
   poiLoading: boolean;
+  poiError: string | null;
   onSearchPois: () => void;
+  // Tankstellen
+  fuelPois: Poi[];
+  fuelLoading: boolean;
+  fuelError: string | null;
+  onSearchFuel: () => void;
   onTogglePoi: (poi: Poi) => void;
   onAddWaypoint: (lng: number, lat: number, label?: string) => void;
   onRemoveWaypoint: (id: string) => void;
@@ -42,23 +48,13 @@ interface Props {
 
 const letter = (i: number) => String.fromCharCode(65 + i);
 
-function fmtDistance(m: number): string {
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
-}
-function fmtDuration(s: number): string {
-  const h = Math.floor(s / 3600);
-  const min = Math.round((s % 3600) / 60);
-  return h > 0 ? `${h} h ${min} min` : `${min} min`;
+/** OSM-Qualität als Sterne (0–5) darstellen. */
+function stars(q: number): string {
+  const full = Math.round(q);
+  return "★".repeat(full) + "☆".repeat(5 - full);
 }
 
 export default function Sidebar(p: Props) {
-  const exportGpx = () => {
-    const track = routeLine(p.route);
-    if (track.length < 2) return;
-    const wpts = p.waypoints.map((w) => ({ lng: w.lng, lat: w.lat, name: w.label }));
-    downloadGpx(track, wpts);
-  };
-
   return (
     <aside className="sidebar">
       <h1>🏍️ Routenplaner</h1>
@@ -261,6 +257,27 @@ export default function Sidebar(p: Props) {
         >
           {p.poiLoading ? "Suche …" : "Entlang der Strecke suchen"}
         </button>
+        {p.poiError && <p className="error">Fehler: {p.poiError}</p>}
+
+        {p.foodTotal > 0 && (
+          <div className="quality-row">
+            <label className="muted">
+              Mindest-Qualität: <b>{stars(p.minQuality)}</b> ({p.minQuality.toFixed(1)})
+            </label>
+            <input
+              type="range"
+              min={3}
+              max={5}
+              step={0.5}
+              value={p.minQuality}
+              onChange={(e) => p.setMinQuality(Number(e.target.value))}
+            />
+            <span className="muted">
+              {p.pois.length} von {p.foodTotal} Treffern (verifiziert &amp; ≥ Schwelle)
+            </span>
+          </div>
+        )}
+
         {p.pois.length > 0 && (
           <ul className="list">
             {p.pois.map((poi) => (
@@ -272,6 +289,12 @@ export default function Sidebar(p: Props) {
                 />
                 <span style={{ flex: 1 }}>
                   {poi.name}
+                  {poi.quality != null && (
+                    <span className="qstars" title={`OSM-Qualität ${poi.quality.toFixed(1)}/5`}>
+                      {" "}
+                      {stars(poi.quality)}
+                    </span>
+                  )}
                   <br />
                   <span className="muted">
                     {poi.kind}
@@ -282,33 +305,54 @@ export default function Sidebar(p: Props) {
             ))}
           </ul>
         )}
+        {p.foodTotal > 0 && p.pois.length === 0 && (
+          <p className="muted">
+            Keine Treffer über der Schwelle – Mindest-Qualität senken.
+          </p>
+        )}
+        <p className="muted">
+          „Qualität" = Vollständigkeit der OSM-Daten (Öffnungszeiten, Website, Küche …),
+          keine echten Nutzer-/Google-Sterne – offene Daten haben keine Bewertungen.
+        </p>
       </div>
 
-      {/* Route-Infos + Export */}
+      {/* Tankstellen */}
       <div className="card">
-        <h2>Route</h2>
-        {p.routeLoading && <p className="spinner">Berechne Route …</p>}
-        {p.routeError && <p className="error">Fehler: {p.routeError}</p>}
-        {p.route && !p.routeLoading && (
-          <>
-            <div className="stat">
-              <span>Distanz</span>
-              <b>{fmtDistance(p.route.distanceM)}</b>
-            </div>
-            <div className="stat">
-              <span>Fahrzeit (ca.)</span>
-              <b>{fmtDuration(p.route.durationS)}</b>
-            </div>
-          </>
-        )}
+        <h2>Tankstellen</h2>
         <button
           className="primary"
-          style={{ marginTop: 10, width: "100%" }}
-          onClick={exportGpx}
-          disabled={!p.route}
+          onClick={p.onSearchFuel}
+          disabled={!p.route || p.fuelLoading}
         >
-          ⬇ GPX exportieren
+          {p.fuelLoading ? "Suche …" : "Tankstellen entlang der Strecke"}
         </button>
+        {p.fuelError && <p className="error">Fehler: {p.fuelError}</p>}
+        {p.fuelPois.length > 0 ? (
+          <ul className="list">
+            {p.fuelPois.map((poi) => (
+              <li key={poi.id}>
+                <input
+                  type="checkbox"
+                  checked={p.selectedPois.has(poi.id)}
+                  onChange={() => p.onTogglePoi(poi)}
+                />
+                <span style={{ flex: 1 }}>
+                  ⛽ {poi.name}
+                  <br />
+                  <span className="muted">
+                    {poi.brand ? `${poi.brand} · ` : ""}
+                    {poi.distance} m zur Route
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">
+            Reale Tankstellen aus OpenStreetMap (Marke/Name). Auswahl fügt sie als
+            Zwischenziel ein.
+          </p>
+        )}
       </div>
     </aside>
   );

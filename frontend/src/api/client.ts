@@ -37,8 +37,12 @@ export function fetchRoadworks(
   return post<Roadwork[]>("/api/roadworks", { points, includeOsm });
 }
 
-export function fetchPois(line: LngLat[], bufferM = 500): Promise<Poi[]> {
-  return post<Poi[]>("/api/pois", { line, bufferM });
+export function fetchPois(
+  line: LngLat[],
+  category: "food" | "fuel" = "food",
+  bufferM = 500,
+): Promise<Poi[]> {
+  return post<Poi[]>("/api/pois", { line, category, bufferM });
 }
 
 export async function geocode(q: string): Promise<GeocodeResult[]> {

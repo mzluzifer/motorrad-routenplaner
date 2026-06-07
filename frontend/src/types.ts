@@ -31,9 +31,14 @@ export interface Poi {
   lat: number;
   lng: number;
   name: string;
-  kind: string;
+  kind: string; // restaurant | fast_food | cafe | fuel
+  category: "food" | "fuel";
   cuisine?: string;
+  brand?: string;
   distance: number;
+  /** OSM-Qualität 0–5 (nur Essen, aus Tag-Vollständigkeit; keine echten Sterne). */
+  quality?: number;
+  verified: boolean;
 }
 
 export interface RouteResult {

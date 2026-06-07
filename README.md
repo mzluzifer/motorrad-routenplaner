@@ -5,8 +5,10 @@ Rundtour), beliebig viele Zwischenziele – per **Eingabefeld** (Adresse/Ort tip
 oder Karten-Klick gesetzt, Start optional per **aktuellem Standort**. Profil
 **Schnell / Kurvig** wahlweise global **oder pro Abschnitt** zwischen zwei Wegpunkten
 (Kurvig meidet Städte & Dörfer), Vermeidung aktueller **Baustellen** (einzeln
-übersteuerbar), Auswahl von **Restaurants/Imbissen** entlang der Strecke und
-**GPX-Export** für Navi/Handy (OsmAnd, Calimoto, Garmin …). Große, zoombare Karte.
+übersteuerbar), Auswahl von **Restaurants/Imbissen und Tankstellen** entlang der
+Strecke und **GPX-Export** für Navi/Handy (OsmAnd, Calimoto, Garmin …). Distanz,
+Fahrzeit und Export liegen in einer **Statusleiste unter der Karte**. Große, zoombare
+Karte.
 
 Alles basiert auf Open-Source-Bausteinen und offenen Daten (OpenStreetMap, BRouter,
 MapLibre, OpenFreeMap, Overpass, Nominatim, Autobahn-GmbH-API).
@@ -30,7 +32,7 @@ Backend (Node/Fastify)  ──►  BRouter (Routing-Engine)
    ├─ /api/geocode     Adresssuche (Nominatim)
    ├─ /api/reverse     Standort -> Adresse (Nominatim, „aktueller Standort")
    ├─ /api/roadworks   Baustellen (Autobahn-GmbH-API + OSM/Overpass)
-   ├─ /api/pois        Restaurants/Imbisse im Puffer um die Route (Overpass)
+   ├─ /api/pois        Restaurants/Imbisse + Tankstellen im Puffer (Overpass)
    └─ /api/gpx         Track + Wegpunkte -> GPX-Datei
 ```
 
@@ -133,11 +135,26 @@ In der App: globaler Schalter **„Baustellen meiden"** plus pro Baustelle ein H
 um einzelne Baustellen doch zu befahren. Aktive Baustellen werden als BRouter-`nogo`
 übergeben, sodass die Route außen herum führt.
 
-## Einkehr (Restaurants/Imbisse)
+## Einkehr (Restaurants/Imbisse) & Tankstellen
 
 Nach der Routenberechnung „Entlang der Strecke suchen" – findet `restaurant`,
 `fast_food` und `cafe` im 500-m-Puffer um die Route (Overpass). Auswahl fügt den Ort
-als Zwischenziel ein, die Route wird neu berechnet.
+als Zwischenziel ein, die Route wird neu berechnet. Analog gibt es eine
+**Tankstellen-Suche** (`amenity=fuel`): reale, benannte Tankstellen aus OpenStreetMap
+mit Marke und Distanz zur Route, ebenfalls per Klick als Zwischenziel einfügbar.
+
+**Qualität/„Sterne":** Echte Nutzer-/Google-Bewertungen gibt es in offenen Daten
+nicht. Statt einer (kostenpflichtigen, proprietären) Google-Places-Anbindung wird die
+**Vollständigkeit der OSM-Tags** (Öffnungszeiten, Website, Küche, Adresse …) als
+0–5-„Qualität" dargestellt. Gut gepflegte Einträge gelten als „verifiziert"; ein
+Schieberegler filtert auf eine Mindest-Qualität (Vorgabe 4,5). Das ist transparent
+**keine** echte Bewertung, sondern ein Datenqualitäts-Indikator.
+
+## Routeninformation (Statusleiste)
+
+Distanz, Fahrzeit (geschätzt) und der **GPX-Export** liegen dauerhaft in einer
+Statusleiste **unter der Karte** – immer sichtbar, unabhängig vom Scrollzustand der
+Seitenleiste.
 
 ## Konfiguration (Backend, `.env`)
 

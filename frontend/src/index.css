@@ -27,11 +27,45 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* Karte füllt die gesamte rechte Fläche */
+/* Rechte Spalte: Karte oben, Statusleiste unten */
+.main {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Karte füllt den restlichen Platz über der Statusleiste */
 .map {
   position: relative;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   width: 100%;
+}
+
+/* Dauerhafte Statusleiste unter der Karte */
+.statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-top: 1px solid #3a4253;
+}
+.sb-stats { display: flex; align-items: center; gap: 16px; flex: 0 0 auto; }
+.sb-stat { display: flex; flex-direction: column; line-height: 1.15; }
+.sb-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.sb-value { font-size: 18px; font-weight: 700; }
+.sb-sep { width: 1px; height: 28px; background: #3a4253; }
+.sb-msg { flex: 1; min-width: 0; font-size: 13px; }
+.sb-export { flex: 0 0 auto; }
+
+@media (max-width: 800px) {
+  .statusbar { gap: 10px; padding: 6px 10px; }
+  .sb-value { font-size: 15px; }
+  .sb-export { padding: 6px 10px; }
 }
 
 .sidebar {
@@ -163,6 +197,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 6px 4px; border-bottom: 1px solid #353c4b; font-size: 13px;
 }
 .muted { color: var(--muted); font-size: 12px; }
+
+/* POI-Qualität (OSM-Vollständigkeit als Sterne) */
+.quality-row { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.quality-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.qstars { color: var(--accent); font-size: 12px; letter-spacing: 1px; }
 .stat { display: flex; justify-content: space-between; font-size: 14px; }
 .stat b { font-size: 16px; }
 
