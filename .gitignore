@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.DS_Store
+
+# BRouter Daten (groß, separat herunterladen)
+brouter-data/segments4/
+brouter-data/customprofiles/
+
+# Packaging-Artefakte
+desktop/build/
+desktop/Routenplaner.exe

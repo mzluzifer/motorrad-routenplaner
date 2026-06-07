@@ -1,0 +1,44 @@
+# Motorrad-Profil "SCHNELL" für BRouter.
+# Ziel: zügige, flüssige Strecke. Große Straßen bevorzugt, Zickzack vermeiden.
+# Die Zahlen sind Erfahrungswerte und dürfen gerne nachjustiert werden.
+
+---context:global
+
+assign turnInstructionMode = 1
+
+---context:way
+
+# Zugang für Kraftfahrzeuge gesperrt?
+assign access_forbidden =
+  or access=private|no
+  or motor_vehicle=private|no
+  motorcar=private|no
+
+# Grundkosten pro Straßenklasse (kleiner = bevorzugt)
+assign roadcost =
+  switch access_forbidden                  10000
+  switch highway=motorway|motorway_link    1.0
+  switch highway=trunk|trunk_link          1.05
+  switch highway=primary|primary_link      1.15
+  switch highway=secondary|secondary_link  1.4
+  switch highway=tertiary|tertiary_link    1.8
+  switch highway=unclassified              2.2
+  switch highway=residential               2.8
+  switch highway=living_street             6.0
+  switch highway=service                   6.0
+  switch or highway=track or highway=path or highway=footway highway=cycleway  10000
+  3.0
+
+assign costfactor = roadcost
+
+# Zickzack bestrafen -> flüssige, schnelle Linie
+assign turncost = 90
+assign initialcost = 0
+
+---context:node
+
+# Sperren/Barrieren als nicht passierbar werten
+assign initialcost =
+  switch or barrier=gate or barrier=bollard or barrier=block barrier=lift_gate
+  10000
+  0

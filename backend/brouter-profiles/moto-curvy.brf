@@ -1,0 +1,47 @@
+# Motorrad-Profil "KURVIG" für BRouter.
+# Ziel: kurvige Landstraßen bevorzugen, ÖDE große Straßen meiden UND – wichtig –
+# Städte/Dörfer meiden (nicht durch Ortschaften fahren, nur weil es dort kurvig
+# aussieht). Das geschieht über hohe Kosten für Ortsstraßen (residential,
+# living_street, service) und niedrige Kosten für kurvige Land-/Nebenstraßen.
+# Niedrige Abbiegekosten = Kurven sind willkommen.
+# Die Zahlen sind Erfahrungswerte und dürfen gerne nachjustiert werden.
+
+---context:global
+
+assign turnInstructionMode = 1
+
+---context:way
+
+assign access_forbidden =
+  or access=private|no
+  or motor_vehicle=private|no
+  motorcar=private|no
+
+# Grundkosten: kurvige Land-/Nebenstraßen billig, Ortsstraßen & öde Schnellstraßen teuer.
+# Hohe Kosten für residential/living_street/service halten die Route aus Ortschaften heraus.
+assign roadcost =
+  switch access_forbidden                  10000
+  switch highway=living_street             60
+  switch highway=residential               12
+  switch highway=service                   30
+  switch highway=motorway|motorway_link    6
+  switch highway=trunk|trunk_link          3.5
+  switch highway=primary|primary_link      1.6
+  switch highway=secondary|secondary_link  1.0
+  switch highway=tertiary|tertiary_link    0.9
+  switch highway=unclassified              1.5
+  switch or highway=track or highway=path or highway=footway highway=cycleway  10000
+  2.5
+
+assign costfactor = roadcost
+
+# Kurven willkommen -> niedrige Abbiegekosten
+assign turncost = 0
+assign initialcost = 0
+
+---context:node
+
+assign initialcost =
+  switch or barrier=gate or barrier=bollard or barrier=block barrier=lift_gate
+  10000
+  0
