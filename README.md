@@ -11,6 +11,14 @@ oder Karten-Klick gesetzt, Start optional per **aktuellem Standort**. Profil
 Alles basiert auf Open-Source-Bausteinen und offenen Daten (OpenStreetMap, BRouter,
 MapLibre, OpenFreeMap, Overpass, Nominatim, Autobahn-GmbH-API).
 
+## Screenshot
+
+![Beispiel: Rundtour Ulm–Blaubeuren mit Wegpunkt- und Baustellen-Markern](docs/screenshot.jpg)
+
+*Rundtour von Ulm (A) nach Blaubeuren (B) und zurück: kurvige Landstraßen statt
+Ortsdurchfahrten, Wegpunkt-Marker (A/B) und entlang der Route gemiedene
+Baustellen (⚠).*
+
 ## Architektur
 
 ```
@@ -47,6 +55,11 @@ genutzt (kein Setup von Routing-Daten nötig).
 > - Zum Beenden einfach das Konsolenfenster schließen.
 > - Eigene Einstellungen (z. B. selbst gehosteten BRouter) per Umgebungsvariablen,
 >   etwa `set BROUTER_URL=http://localhost:17777/brouter` vor dem Start.
+
+Fertige EXEs gibt es als Download unter
+[Releases](https://github.com/mzluzifer/motorrad-routenplaner/releases). Ein
+GitHub-Actions-Workflow ([`.github/workflows/build-exe.yml`](.github/workflows/build-exe.yml))
+baut die EXE bei jedem neuen Versions-Tag (`v*`) automatisch und hängt sie ans Release.
 
 ## Schnellstart (ohne Docker, zum Ausprobieren)
 

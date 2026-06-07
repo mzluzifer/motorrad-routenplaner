@@ -1,0 +1,46 @@
+name: Build Windows EXE
+
+# Baut die eigenständige Windows-EXE und hängt sie an das Release des Tags.
+# Auslöser: ein neuer Versions-Tag (z. B. v0.2.0) oder manuell über die Actions-UI.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Die EXE basiert auf der node.exe des Runners -> Windows nötig.
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: EXE bauen
+        run: npm run package:win
+
+      - name: EXE ans Release hängen
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/Routenplaner.exe
+          fail_on_unmatched_files: true
+
+      - name: EXE als Build-Artefakt speichern (bei manuellem Lauf)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Routenplaner-exe
+          path: desktop/Routenplaner.exe

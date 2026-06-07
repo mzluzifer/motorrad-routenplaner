@@ -42,6 +42,8 @@ export default function MapView(props: Props) {
       style: STYLE_URL,
       center: [10.45, 51.16], // Deutschland
       zoom: 6,
+      // Erlaubt den Export des Kartenbilds (z. B. Screenshot via canvas.toDataURL).
+      preserveDrawingBuffer: true,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
