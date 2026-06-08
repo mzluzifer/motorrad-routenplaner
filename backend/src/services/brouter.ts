@@ -74,6 +74,8 @@ export interface BRouterResult {
   elevation: ElevationSample[];
   /** Maut- und Fährstellen entlang der Route. */
   features: RouteFeaturePoint[];
+  /** Alternative Routen (nur am Hauptergebnis gesetzt). */
+  alternatives?: BRouterResult[];
 }
 
 /** Eine Zeile der BRouter-„messages"-Tabelle, geparst. */
@@ -91,6 +93,7 @@ async function routeOnce(
   points: LngLat[],
   profile: ProfileName,
   nogos: NoGo[],
+  alternativeIdx = 0,
 ): Promise<{
   coords: LngLat[];
   distanceM: number;
@@ -102,7 +105,7 @@ async function routeOnce(
   const params = new URLSearchParams({
     lonlats: formatPoints(points),
     profile: profileId,
-    alternativeidx: "0",
+    alternativeidx: String(alternativeIdx),
     format: "geojson",
   });
   const nogoStr = formatNogos(nogos);
@@ -219,15 +222,16 @@ function extractFeatures(
 }
 
 /**
- * Routet über die Wegpunkte. `profiles` legt je Abschnitt (points[i] -> points[i+1])
- * das Profil fest. Jeder Abschnitt wird einzeln über BRouter geroutet, damit Distanz
- * und Fahrzeit pro Teilstrecke vorliegen; die Teilstücke werden zu einem durchgehenden
- * Track zusammengefügt.
+ * Routet eine einzelne Variante über die Wegpunkte. `profiles` legt je Abschnitt
+ * (points[i] -> points[i+1]) das Profil fest. Jeder Abschnitt wird einzeln über
+ * BRouter geroutet (mit `alternativeIdx`), damit Distanz und Fahrzeit pro Teilstrecke
+ * vorliegen; die Teilstücke werden zu einem durchgehenden Track zusammengefügt.
  */
-export async function route(
+async function routeVariant(
   points: LngLat[],
   profiles: ProfileName[],
-  nogos: NoGo[] = [],
+  nogos: NoGo[],
+  alternativeIdx: number,
 ): Promise<BRouterResult> {
   if (points.length < 2) {
     throw new Error("Mindestens zwei Punkte nötig.");
@@ -246,7 +250,7 @@ export async function route(
 
   for (let i = 0; i < segCount; i++) {
     const profile = profiles[i] ?? profiles[0] ?? "curvy";
-    const r = await routeOnce([points[i], points[i + 1]], profile, nogos);
+    const r = await routeOnce([points[i], points[i + 1]], profile, nogos, alternativeIdx);
     // Am Übergang den doppelten Punkt (Wegpunkt) weglassen.
     if (merged.length === 0) merged.push(...r.coords);
     else merged.push(...r.coords.slice(1));
@@ -275,6 +279,40 @@ export async function route(
   };
 
   return { geojson, distanceM, durationS, legs, elevation, features };
+}
+
+/** Zwei Varianten gelten als „echt verschieden", wenn sich ihre Länge um >2 % unterscheidet. */
+function isDistinct(a: BRouterResult, others: BRouterResult[]): boolean {
+  return others.every(
+    (o) => Math.abs(a.distanceM - o.distanceM) / Math.max(1, o.distanceM) > 0.02,
+  );
+}
+
+/**
+ * Routet über die Wegpunkte und liefert zusätzlich bis zu zwei alternative Routen.
+ * Die Hauptroute nutzt `alternativeidx=0`; die Alternativen idx 1/2 von BRouter.
+ * Varianten, die fehlschlagen oder der Hauptroute (bzw. einer bereits gewählten
+ * Alternative) zu ähnlich sind, werden verworfen.
+ */
+export async function route(
+  points: LngLat[],
+  profiles: ProfileName[],
+  nogos: NoGo[] = [],
+): Promise<BRouterResult> {
+  const main = await routeVariant(points, profiles, nogos, 0);
+
+  const kept: BRouterResult[] = [];
+  for (const idx of [1, 2]) {
+    if (kept.length >= 2) break;
+    try {
+      const alt = await routeVariant(points, profiles, nogos, idx);
+      if (isDistinct(alt, [main, ...kept])) kept.push(alt);
+    } catch {
+      /* Alternative nicht verfügbar – ignorieren. */
+    }
+  }
+
+  return kept.length ? { ...main, alternatives: kept } : main;
 }
 
 /** Erzwingt Neu-Upload (z.B. nach Profiländerung im Dev-Betrieb). */

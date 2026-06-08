@@ -7,6 +7,7 @@ import type {
   ProfileName,
   Roadwork,
   RouteResult,
+  VersionInfo,
   WeatherResult,
 } from "../types";
 
@@ -53,6 +54,13 @@ export function fetchWeather(
   samples = 5,
 ): Promise<WeatherResult> {
   return post<WeatherResult>("/api/weather", { line, date, samples });
+}
+
+/** Versions-Check gegen das neueste GitHub-Release. */
+export async function fetchVersion(current: string): Promise<VersionInfo> {
+  const res = await fetch(`/api/version?current=${encodeURIComponent(current)}`);
+  if (!res.ok) throw new Error("Versions-Check fehlgeschlagen");
+  return res.json();
 }
 
 export async function geocode(q: string): Promise<GeocodeResult[]> {

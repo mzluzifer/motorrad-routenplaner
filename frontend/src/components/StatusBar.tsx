@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { RouteResult } from "../types";
 import { fmtDistance, fmtDuration } from "../format";
 
@@ -8,7 +8,29 @@ interface Props {
   routeError: string | null;
   /** Wegpunkt-Markierungen fürs Höhenprofil (kumulierte Distanz + Buchstabe). */
   waypointMarks: { atM: number; label: string }[];
+  /** Alle Varianten (Haupt + Alternativen) zur Auswahl. */
+  allRoutes: RouteResult[];
+  selectedRouteIdx: number;
+  onSelectRoute: (idx: number) => void;
+  /** Hover-Position entlang der Strecke (kumulierte Distanz in m, null = aus). */
+  hoverM: number | null;
+  /** Hover-Position melden (vom Überfahren des Höhenprofils). */
+  onHoverM: (m: number | null) => void;
   onExportGpx: () => void;
+}
+
+/** Höhe (interpoliert) an kumulierter Distanz `m` aus den Stützstellen. */
+function elevationAt(elev: { d: number; e: number }[], m: number): number | null {
+  if (elev.length === 0) return null;
+  if (m <= elev[0].d) return elev[0].e;
+  for (let i = 0; i < elev.length - 1; i++) {
+    if (m <= elev[i + 1].d) {
+      const span = elev[i + 1].d - elev[i].d || 1;
+      const t = (m - elev[i].d) / span;
+      return elev[i].e + t * (elev[i + 1].e - elev[i].e);
+    }
+  }
+  return elev[elev.length - 1].e;
 }
 
 const VB_W = 1000;
@@ -52,11 +74,28 @@ export default function StatusBar({
   routeLoading,
   routeError,
   waypointMarks,
+  allRoutes,
+  selectedRouteIdx,
+  onSelectRoute,
+  hoverM,
+  onHoverM,
   onExportGpx,
 }: Props) {
   const totalM = route?.distanceM ?? 0;
   const elev = route?.elevation ?? [];
   const chart = useMemo(() => buildPath(elev, totalM), [elev, totalM]);
+  const elevRef = useRef<HTMLDivElement>(null);
+
+  // Maus über dem Höhenprofil -> Distanz aus x-Position ableiten und melden.
+  const onElevMove = (e: React.MouseEvent) => {
+    const box = elevRef.current?.getBoundingClientRect();
+    if (!box || totalM <= 0 || box.width === 0) return;
+    const frac = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    onHoverM(frac * totalM);
+  };
+
+  const hoverPct = hoverM != null && totalM > 0 ? (hoverM / totalM) * 100 : null;
+  const hoverEle = hoverM != null ? elevationAt(elev, hoverM) : null;
 
   return (
     <div className="statusbar">
@@ -70,13 +109,38 @@ export default function StatusBar({
           <span className="sb-label">Fahrzeit (ca.)</span>
           <span className="sb-value">{route ? fmtDuration(route.durationS) : "–"}</span>
         </div>
+
+        {allRoutes.length > 1 && (
+          <>
+            <div className="sb-sep" />
+            <div className="sb-variants" title="Streckenvariante wählen">
+              {allRoutes.map((r, i) => (
+                <button
+                  key={i}
+                  className={`sb-variant${i === selectedRouteIdx ? " active" : ""}`}
+                  onClick={() => onSelectRoute(i)}
+                  title={`${fmtDistance(r.distanceM)} · ${fmtDuration(r.durationS)}`}
+                >
+                  {i === 0 ? "Route" : `Var. ${i}`}
+                  <span className="sb-variant-meta">{fmtDistance(r.distanceM)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="sb-mid">
         {routeLoading && <span className="spinner">Berechne Route …</span>}
         {!routeLoading && routeError && <span className="error">Fehler: {routeError}</span>}
         {!routeLoading && !routeError && chart && (
-          <div className="elev" title="Höhenprofil">
+          <div
+            className="elev"
+            title="Höhenprofil"
+            ref={elevRef}
+            onMouseMove={onElevMove}
+            onMouseLeave={() => onHoverM(null)}
+          >
             <svg
               className="elev-svg"
               viewBox={`0 0 ${VB_W} ${VB_H}`}
@@ -84,6 +148,15 @@ export default function StatusBar({
             >
               <path d={chart.area} className="elev-area" />
               <path d={chart.line} className="elev-line" />
+              {hoverPct != null && (
+                <line
+                  x1={(hoverPct / 100) * VB_W}
+                  x2={(hoverPct / 100) * VB_W}
+                  y1={0}
+                  y2={VB_H}
+                  className="elev-hover"
+                />
+              )}
               {waypointMarks.map((m, i) => {
                 const xPct = totalM > 0 ? (m.atM / totalM) * 100 : 0;
                 return (
@@ -114,6 +187,16 @@ export default function StatusBar({
                 </span>
               );
             })}
+            {/* Hover-Anzeige: km + Höhe an der Cursor-Position */}
+            {hoverPct != null && (
+              <span
+                className="elev-hover-label"
+                style={{ left: `${hoverPct}%` }}
+              >
+                {(hoverM! / 1000).toFixed(1)} km
+                {hoverEle != null ? ` · ${Math.round(hoverEle)} m` : ""}
+              </span>
+            )}
           </div>
         )}
         {!routeLoading && !routeError && !chart && (

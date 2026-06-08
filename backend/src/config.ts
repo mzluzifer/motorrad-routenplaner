@@ -43,6 +43,8 @@ export const config = {
   })(),
   nominatimUrl: process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org",
   autobahnUrl: process.env.AUTOBAHN_URL ?? "https://verkehr.autobahn.de/o/autobahn",
+  // GitHub-Repository (für Versions-Check und Repo-Link in der Kopfzeile).
+  githubRepo: process.env.GITHUB_REPO ?? "mzluzifer/motorrad-routenplaner",
   contactEmail: process.env.CONTACT_EMAIL ?? "",
   // Verzeichnis mit den BRouter-Profildateien (.brf) – nur im Dev-Betrieb.
   profilesDir: resolve(here, "..", "brouter-profiles"),

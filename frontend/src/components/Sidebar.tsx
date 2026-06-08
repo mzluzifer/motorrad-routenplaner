@@ -77,8 +77,6 @@ export default function Sidebar(p: Props) {
   const [roadworksOpen, setRoadworksOpen] = useState(false);
   return (
     <aside className="sidebar">
-      <h1>🏍️ Routenplaner</h1>
-
       {/* Wegpunkte mit Eingabefeldern + Abschnittsprofilen */}
       <div className="card">
         <h2>Wegpunkte</h2>

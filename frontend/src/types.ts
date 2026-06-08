@@ -72,6 +72,8 @@ export interface RouteResult {
   elevation?: ElevationSample[];
   /** Maut-/Fährstellen entlang der Route. */
   features?: RouteFeaturePoint[];
+  /** Alternative Routen (nur am Hauptergebnis gesetzt). */
+  alternatives?: RouteResult[];
 }
 
 export interface WeatherPoint {
@@ -94,4 +96,12 @@ export interface GeocodeResult {
   label: string;
   lat: number;
   lng: number;
+}
+
+export interface VersionInfo {
+  current: string;
+  latest: string | null;
+  updateAvailable: boolean;
+  releaseUrl: string;
+  repoUrl: string;
 }

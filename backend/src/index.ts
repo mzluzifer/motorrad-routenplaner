@@ -12,6 +12,7 @@ import { findPois } from "./services/overpass.js";
 import { getRoadworks, bboxOf } from "./services/roadworks.js";
 import { geocode, reverseGeocode } from "./services/geocode.js";
 import { weatherAlong } from "./services/weather.js";
+import { getVersionInfo } from "./services/version.js";
 import { buildGpx, type GpxWaypoint } from "./services/gpx.js";
 import { staticAsset, devPublicDir } from "./resources.js";
 import type { LngLat, NoGo, ProfileName, RouteRequest } from "./types.js";
@@ -121,6 +122,12 @@ app.post<{
     req.log.error(err);
     return reply.code(502).send({ error: String(err.message ?? err) });
   }
+});
+
+// --- Versions-Check (neueres GitHub-Release?) ------------------------------
+app.get<{ Querystring: { current?: string } }>("/api/version", async (req) => {
+  const current = (req.query.current ?? "0.0.0").trim() || "0.0.0";
+  return getVersionInfo(current);
 });
 
 // --- GPX-Export ------------------------------------------------------------

@@ -1,19 +1,37 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { weatherIcon, weatherText } from "../weather";
-import type { Poi, Roadwork, RouteResult, Waypoint, WeatherPoint } from "../types";
+import { coordAtDistance, projectOnLine } from "../geo";
+import type { LngLat, Poi, Roadwork, RouteResult, Waypoint, WeatherPoint } from "../types";
 
 interface Props {
   waypoints: Waypoint[];
   route: RouteResult | null;
+  /** Alle Varianten (Haupt + Alternativen); Index 0 = Hauptroute. */
+  allRoutes: RouteResult[];
+  selectedRouteIdx: number;
+  onSelectRoute: (idx: number) => void;
   roadworks: Roadwork[];
   disabledRoadworks: Set<string>;
   avoidConstruction: boolean;
   pois: Poi[];
   selectedPois: Set<string>;
   weather: WeatherPoint[];
+  /** Hover-Position entlang der Strecke (kumulierte Distanz in m, null = aus). */
+  hoverM: number | null;
+  /** Hover-Position melden (vom Überfahren der Karte). */
+  onHoverM: (m: number | null) => void;
   onMapClick: (lng: number, lat: number) => void;
   onTogglePoi: (poi: Poi) => void;
+}
+
+/** LineString-Koordinaten der berechneten Route. */
+function lineOf(route: RouteResult | null): LngLat[] {
+  if (!route?.geojson) return [];
+  for (const f of route.geojson.features) {
+    if (f.geometry.type === "LineString") return f.geometry.coordinates as LngLat[];
+  }
+  return [];
 }
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
@@ -33,6 +51,9 @@ export default function MapView(props: Props) {
   const loadedRef = useRef(false);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const popupsRef = useRef<maplibregl.Popup[]>([]);
+  // Beständiger Hover-Marker (Streckenposition) – außerhalb des Marker-Rebuilds.
+  const hoverMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const hoverLabelRef = useRef<HTMLDivElement | null>(null);
   // aktuellste Callbacks ohne Stale-Closure
   const cbRef = useRef(props);
   cbRef.current = props;
@@ -53,6 +74,20 @@ export default function MapView(props: Props) {
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
 
     map.on("load", () => {
+      // Alternativrouten zuerst (liegen unter der aktiven Route).
+      map.addSource("alt-routes", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "alt-lines",
+        type: "line",
+        source: "alt-routes",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": "#9aa3b2",
+          "line-width": 5,
+          "line-opacity": 0.7,
+          "line-dasharray": [1.5, 1.5],
+        },
+      });
       map.addSource("route", { type: "geojson", data: emptyFc() });
       map.addLayer({
         id: "route-line",
@@ -63,12 +98,41 @@ export default function MapView(props: Props) {
       });
       loadedRef.current = true;
       syncRoute();
+      syncAltRoutes();
       syncMarkers();
     });
 
     map.on("click", (e) => {
+      // Klick auf eine Alternativroute -> als aktive Variante wählen (kein neuer Wegpunkt).
+      const hits = map.queryRenderedFeatures(e.point, { layers: ["alt-lines"] });
+      const idx = hits[0]?.properties?.idx;
+      if (idx != null) {
+        cbRef.current.onSelectRoute(Number(idx));
+        return;
+      }
       cbRef.current.onMapClick(e.lngLat.lng, e.lngLat.lat);
     });
+    map.on("mouseenter", "alt-lines", () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", "alt-lines", () => {
+      map.getCanvas().style.cursor = "";
+    });
+
+    // Hover über der Karte: Cursor auf die Route projizieren -> km-Position melden.
+    map.on("mousemove", (e) => {
+      const line = lineOf(cbRef.current.route);
+      if (line.length < 2) {
+        if (cbRef.current.hoverM != null) cbRef.current.onHoverM(null);
+        return;
+      }
+      const { distance, point } = projectOnLine(line, [e.lngLat.lng, e.lngLat.lat]);
+      // Nur als „auf der Strecke" werten, wenn der Cursor nah genug (in Pixeln) ist.
+      const footPx = map.project(point as [number, number]);
+      const dpx = Math.hypot(footPx.x - e.point.x, footPx.y - e.point.y);
+      cbRef.current.onHoverM(dpx <= 24 ? distance : null);
+    });
+    map.getCanvas().addEventListener("mouseleave", () => cbRef.current.onHoverM(null));
 
     mapRef.current = map;
     return () => {
@@ -81,6 +145,10 @@ export default function MapView(props: Props) {
 
   // Route aktualisieren + einpassen
   useEffect(syncRoute, [props.route]);
+  // Alternativrouten (nicht gewählte Varianten) zeichnen
+  useEffect(syncAltRoutes, [props.allRoutes, props.selectedRouteIdx]);
+  // Hover-Punkt (Streckenposition) anzeigen/verschieben
+  useEffect(syncHover, [props.hoverM, props.route]);
   // Marker (Wegpunkte, Baustellen, POIs, Maut/Fähren, Wetter) neu aufbauen
   useEffect(syncMarkers, [
     props.waypoints,
@@ -113,6 +181,60 @@ export default function MapView(props: Props) {
       }
     } else {
       src.setData(emptyFc());
+    }
+  }
+
+  /** Nicht gewählte Varianten als gestrichelte Linien zeichnen (klickbar). */
+  function syncAltRoutes() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    const src = map.getSource("alt-routes") as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+    const p = cbRef.current;
+    const features: GeoJSON.Feature[] = [];
+    p.allRoutes.forEach((r, idx) => {
+      if (idx === p.selectedRouteIdx) return; // aktive Route liegt im "route"-Layer
+      const coords = lineOf(r);
+      if (coords.length < 2) return;
+      features.push({
+        type: "Feature",
+        properties: { idx },
+        geometry: { type: "LineString", coordinates: coords },
+      });
+    });
+    src.setData({ type: "FeatureCollection", features });
+  }
+
+  /** Hover-Marker auf der Strecke an der Position `hoverM` zeigen/verschieben. */
+  function syncHover() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
+    const m = cbRef.current.hoverM;
+    const line = lineOf(cbRef.current.route);
+    const pt = m != null ? coordAtDistance(line, m) : null;
+    if (!pt) {
+      hoverMarkerRef.current?.remove();
+      hoverMarkerRef.current = null;
+      return;
+    }
+    if (!hoverMarkerRef.current) {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "width:14px;height:14px;border-radius:50%;background:var(--accent-2,#18a0ff);" +
+        "border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.4);pointer-events:none;";
+      const label = document.createElement("div");
+      label.style.cssText =
+        "position:absolute;left:50%;bottom:18px;transform:translateX(-50%);white-space:nowrap;" +
+        "background:#18a0ff;color:#06121f;font-size:11px;font-weight:700;padding:1px 6px;" +
+        "border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.5);";
+      el.appendChild(label);
+      hoverLabelRef.current = label;
+      hoverMarkerRef.current = new maplibregl.Marker({ element: el }).setLngLat(pt).addTo(map);
+    } else {
+      hoverMarkerRef.current.setLngLat(pt);
+    }
+    if (hoverLabelRef.current) {
+      hoverLabelRef.current.textContent = `${(m! / 1000).toFixed(1)} km`;
     }
   }
 

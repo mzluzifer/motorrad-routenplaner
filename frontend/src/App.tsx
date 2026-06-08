@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapView from "./components/MapView";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
+import TopBar from "./components/TopBar";
 import {
   downloadGpx,
   fetchPois,
@@ -50,6 +51,15 @@ export default function App() {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  // Gewählte Variante: 0 = Hauptroute, 1..n = Alternative. Bei Neuberechnung -> 0.
+  const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
+
+  // Alle Varianten (Haupt + Alternativen) und die aktuell aktive Route.
+  const allRoutes = useMemo<RouteResult[]>(
+    () => (route ? [route, ...(route.alternatives ?? [])] : []),
+    [route],
+  );
+  const activeRoute = allRoutes[selectedRouteIdx] ?? route;
 
   const [pois, setPois] = useState<Poi[]>([]);
   const [selectedPois, setSelectedPois] = useState<Set<string>>(new Set());
@@ -62,6 +72,10 @@ export default function App() {
   const [fuelPois, setFuelPois] = useState<Poi[]>([]);
   const [fuelLoading, setFuelLoading] = useState(false);
   const [fuelError, setFuelError] = useState<string | null>(null);
+
+  // Hover-Position entlang der Strecke (kumulierte Distanz in m, null = kein Hover).
+  // Bidirektional zwischen Karte und Höhenprofil synchronisiert.
+  const [hoverM, setHoverM] = useState<number | null>(null);
 
   // Wetter entlang der Strecke (leeres Datum = heute).
   const [weatherDate, setWeatherDate] = useState("");
@@ -187,6 +201,7 @@ export default function App() {
       try {
         const r = await fetchRoute(effectivePoints, segmentProfiles, activeNogos);
         setRoute(r);
+        setSelectedRouteIdx(0);
       } catch (e: any) {
         setRouteError(e.message ?? String(e));
         setRoute(null);
@@ -252,7 +267,7 @@ export default function App() {
 
   // --- POIs (Restaurants/Imbisse + Tankstellen) ---
   const searchPois = async () => {
-    const line = routeLine(route);
+    const line = routeLine(activeRoute);
     if (line.length < 2) return;
     setPoiLoading(true);
     setPoiError(null);
@@ -266,7 +281,7 @@ export default function App() {
   };
 
   const searchFuel = async () => {
-    const line = routeLine(route);
+    const line = routeLine(activeRoute);
     if (line.length < 2) return;
     setFuelLoading(true);
     setFuelError(null);
@@ -283,8 +298,8 @@ export default function App() {
   // Wir projizieren den POI auf die berechnete Route und ordnen ihn dem Abschnitt
   // zu, in dem die Projektion liegt -> Einfügen direkt nach dessen Start-Wegpunkt.
   const insertIndexForPoi = (poi: Poi): number => {
-    const line = routeLine(route);
-    const legs = route?.legs ?? [];
+    const line = routeLine(activeRoute);
+    const legs = activeRoute?.legs ?? [];
     if (line.length < 2 || legs.length === 0) {
       return Math.max(1, waypoints.length - 1);
     }
@@ -326,7 +341,7 @@ export default function App() {
 
   // --- Wetter entlang der Strecke ---
   const searchWeather = async () => {
-    const line = routeLine(route);
+    const line = routeLine(activeRoute);
     if (line.length < 2) return;
     setWeatherLoading(true);
     setWeatherError(null);
@@ -353,7 +368,7 @@ export default function App() {
 
   // Wegpunkt-Markierungen fürs Höhenprofil (kumulierte Distanz + Buchstabe).
   const waypointMarks = useMemo(() => {
-    const legs = route?.legs ?? [];
+    const legs = activeRoute?.legs ?? [];
     if (!legs.length) return [] as { atM: number; label: string }[];
     const letter = (i: number) => String.fromCharCode(65 + i);
     const marks = [{ atM: 0, label: letter(0) }];
@@ -364,11 +379,11 @@ export default function App() {
       marks.push({ atM: cum, label: isReturn ? letter(0) : letter(i + 1) });
     }
     return marks;
-  }, [route, roundTrip]);
+  }, [activeRoute, roundTrip]);
 
   // --- GPX-Export (für die Statusleiste unter der Karte) ---
   const exportGpx = () => {
-    const track = routeLine(route);
+    const track = routeLine(activeRoute);
     if (track.length < 2) return;
     const wpts = waypoints.map((w) => ({ lng: w.lng, lat: w.lat, name: w.label }));
     downloadGpx(track, wpts);
@@ -379,6 +394,7 @@ export default function App() {
       className="app"
       style={{ ["--sidebar-w" as string]: `${sidebarWidth}px` } as React.CSSProperties}
     >
+      <TopBar />
       <Sidebar
         waypoints={waypoints}
         profile={defaultProfile}
@@ -431,21 +447,31 @@ export default function App() {
       <div className="main">
         <MapView
           waypoints={waypoints}
-          route={route}
+          route={activeRoute}
+          allRoutes={allRoutes}
+          selectedRouteIdx={selectedRouteIdx}
+          onSelectRoute={setSelectedRouteIdx}
           roadworks={roadworks}
           disabledRoadworks={disabledRoadworks}
           avoidConstruction={avoidConstruction}
           pois={mapPois}
           selectedPois={selectedPois}
           weather={weather}
+          hoverM={hoverM}
+          onHoverM={setHoverM}
           onMapClick={(lng, lat) => addWaypoint(lng, lat)}
           onTogglePoi={togglePoi}
         />
         <StatusBar
-          route={route}
+          route={activeRoute}
           routeLoading={routeLoading}
           routeError={routeError}
           waypointMarks={waypointMarks}
+          allRoutes={allRoutes}
+          selectedRouteIdx={selectedRouteIdx}
+          onSelectRoute={setSelectedRouteIdx}
+          hoverM={hoverM}
+          onHoverM={setHoverM}
           onExportGpx={exportGpx}
         />
       </div>

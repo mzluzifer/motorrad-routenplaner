@@ -23,9 +23,37 @@ html, body, #root {
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w, 360px) 6px 1fr;
+  grid-template-rows: auto 1fr;
   height: 100vh;
   overflow: hidden;
 }
+
+/* Kopfzeile über die gesamte Breite */
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid #3a4253;
+}
+.tb-title { font-size: 15px; font-weight: 700; }
+.tb-version { font-size: 12px; color: var(--muted); }
+.tb-update {
+  font-size: 12px; font-weight: 700; text-decoration: none;
+  color: #1a1a1a; background: var(--accent);
+  padding: 3px 9px; border-radius: 999px;
+}
+.tb-update:hover { filter: brightness(1.08); }
+.tb-uptodate { font-size: 12px; color: #7ad1a0; }
+.tb-repo {
+  margin-left: auto;
+  font-size: 13px; text-decoration: none; color: var(--text);
+  background: var(--panel-2); border: 1px solid #3a4253;
+  padding: 6px 12px; border-radius: 8px;
+}
+.tb-repo:hover { border-color: var(--accent); }
 
 /* Ziehbarer Trenner zwischen Seitenleiste und Karte */
 .resizer {
@@ -70,6 +98,17 @@ html, body, #root {
 .sb-mid { flex: 1; min-width: 0; font-size: 13px; display: flex; align-items: center; justify-content: center; }
 .sb-export { flex: 0 0 auto; }
 
+/* Streckenvarianten-Auswahl in der Statusleiste */
+.sb-variants { display: flex; gap: 6px; flex: 0 0 auto; }
+.sb-variant {
+  display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1;
+  padding: 4px 9px; font-size: 12px; font-weight: 600;
+}
+.sb-variant.active {
+  background: var(--accent-2); border-color: var(--accent-2); color: #06121f;
+}
+.sb-variant-meta { font-size: 10px; font-weight: 500; opacity: 0.8; }
+
 /* Höhenprofil in der Statusleiste – mittig, dynamisch breit */
 .elev {
   position: relative;
@@ -87,6 +126,14 @@ html, body, #root {
 }
 .elev-max { position: absolute; top: 0; left: 2px; font-size: 10px; color: var(--muted); }
 .elev-min { position: absolute; bottom: 0; left: 2px; font-size: 10px; color: var(--muted); }
+.elev:hover { cursor: crosshair; }
+.elev-hover { stroke: var(--accent-2); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.elev-hover-label {
+  position: absolute; bottom: 2px; transform: translateX(-50%);
+  font-size: 11px; font-weight: 700; color: #06121f;
+  background: var(--accent-2); padding: 0 5px; border-radius: 5px;
+  white-space: nowrap; pointer-events: none;
+}
 
 /* Wetter-Panel */
 .weather-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -98,7 +145,7 @@ html, body, #root {
 .w-icon { font-size: 18px; flex: 0 0 auto; width: 22px; text-align: center; }
 
 @media (max-width: 800px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: 44vh 1fr; }
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 44vh 1fr; }
   .resizer { display: none; }
   .statusbar { gap: 10px; padding: 6px 10px; flex-wrap: wrap; }
   .sb-value { font-size: 15px; }

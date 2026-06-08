@@ -20,7 +20,19 @@ export function distanceM(a: LngLat, b: LngLat): number {
  * Näherung – für die Streckenlängen hier völlig ausreichend.
  */
 export function projectDistanceAlong(line: LngLat[], pt: LngLat): number {
-  if (line.length < 2) return 0;
+  return projectOnLine(line, pt).distance;
+}
+
+/**
+ * Wie `projectDistanceAlong`, liefert zusätzlich den Fußpunkt auf der Linie und
+ * dessen Abstand zum Punkt (in Metern). Praktisch für Hover: Distanz entlang der
+ * Strecke + ob der Cursor nah genug an der Linie ist.
+ */
+export function projectOnLine(
+  line: LngLat[],
+  pt: LngLat,
+): { distance: number; point: LngLat; offsetM: number } {
+  if (line.length < 2) return { distance: 0, point: line[0] ?? pt, offsetM: Infinity };
   const lat0 = rad(pt[1]);
   const mx = (lng: number) => rad(lng) * Math.cos(lat0) * R;
   const my = (lat: number) => rad(lat) * R;
@@ -30,6 +42,7 @@ export function projectDistanceAlong(line: LngLat[], pt: LngLat): number {
   let cum = 0; // kumulierte Distanz bis Segmentanfang
   let best = Infinity;
   let bestDist = 0;
+  let bestPoint: LngLat = line[0];
   for (let i = 0; i < line.length - 1; i++) {
     const ax = mx(line[i][0]);
     const ay = my(line[i][1]);
@@ -46,8 +59,35 @@ export function projectDistanceAlong(line: LngLat[], pt: LngLat): number {
     if (d2 < best) {
       best = d2;
       bestDist = cum + t * segLen;
+      // Fußpunkt zurück in lng/lat interpolieren (linear entlang des Segments).
+      bestPoint = [
+        line[i][0] + t * (line[i + 1][0] - line[i][0]),
+        line[i][1] + t * (line[i + 1][1] - line[i][1]),
+      ];
     }
     cum += segLen;
   }
-  return bestDist;
+  return { distance: bestDist, point: bestPoint, offsetM: Math.sqrt(best) };
+}
+
+/**
+ * Liefert die Koordinate auf der Polylinie bei kumulierter Distanz `m` (in Metern).
+ * Umkehrung von `projectDistanceAlong` – für Hover vom Höhenprofil zurück auf die Karte.
+ */
+export function coordAtDistance(line: LngLat[], m: number): LngLat | null {
+  if (line.length < 2) return null;
+  if (m <= 0) return line[0];
+  let cum = 0;
+  for (let i = 0; i < line.length - 1; i++) {
+    const segLen = distanceM(line[i], line[i + 1]);
+    if (cum + segLen >= m) {
+      const t = segLen === 0 ? 0 : (m - cum) / segLen;
+      return [
+        line[i][0] + t * (line[i + 1][0] - line[i][0]),
+        line[i][1] + t * (line[i + 1][1] - line[i][1]),
+      ];
+    }
+    cum += segLen;
+  }
+  return line[line.length - 1];
 }
