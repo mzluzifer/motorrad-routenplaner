@@ -47,8 +47,20 @@ html, body, #root {
 }
 .tb-update:hover { filter: brightness(1.08); }
 .tb-uptodate { font-size: 12px; color: #7ad1a0; }
-.tb-repo {
+.tb-lang {
   margin-left: auto;
+  display: flex; gap: 2px;
+  background: var(--panel-2); border: 1px solid #3a4253;
+  border-radius: 8px; padding: 2px;
+}
+.tb-lang-btn {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 4px 6px; border-radius: 6px;
+  filter: grayscale(0.6) opacity(0.7);
+}
+.tb-lang-btn:hover { filter: none; }
+.tb-lang-btn.active { background: var(--accent); filter: none; }
+.tb-repo {
   font-size: 13px; text-decoration: none; color: var(--text);
   background: var(--panel-2); border: 1px solid #3a4253;
   padding: 6px 12px; border-radius: 8px;

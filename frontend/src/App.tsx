@@ -12,6 +12,7 @@ import {
   reverseGeocode,
 } from "./api/client";
 import { projectDistanceAlong } from "./geo";
+import { useI18n } from "./i18n";
 import type {
   LngLat,
   Poi,
@@ -37,6 +38,7 @@ export function routeLine(route: RouteResult | null): LngLat[] {
 }
 
 export default function App() {
+  const { t } = useI18n();
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   // Vorgabeprofil für neue Abschnitte; einzelne Abschnitte können abweichen.
   const [defaultProfile, setDefaultProfile] = useState<ProfileName>("curvy");
@@ -122,12 +124,14 @@ export default function App() {
           id: newId(),
           lng,
           lat,
-          label: label ?? `Punkt (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+          label:
+            label ??
+            t("geo.pointLabel", { lat: lat.toFixed(4), lng: lng.toFixed(4) }),
           profile: defaultProfile,
         },
       ]);
     },
-    [defaultProfile],
+    [defaultProfile, t],
   );
   const updateWaypoint = (id: string, lng: number, lat: number, label: string) =>
     setWaypoints((w) =>
@@ -158,14 +162,14 @@ export default function App() {
   // --- Aktueller Standort als Start ---
   const useMyLocation = () => {
     if (!navigator.geolocation) {
-      setRouteError("Standortbestimmung wird vom Browser nicht unterstützt.");
+      setRouteError(t("geo.unsupported"));
       return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
-        let label = "📍 Mein Standort";
+        let label = t("geo.myLocation");
         try {
           const r = await reverseGeocode(lat, lng);
           if (r?.label) label = "📍 " + r.label.split(",").slice(0, 2).join(",").trim();
@@ -180,7 +184,7 @@ export default function App() {
         setLocating(false);
       },
       (err) => {
-        setRouteError("Standort nicht verfügbar: " + err.message);
+        setRouteError(t("geo.unavailable", { msg: err.message }));
         setLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },

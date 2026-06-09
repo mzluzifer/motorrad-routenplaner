@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { weatherIcon, weatherText } from "../weather";
 import { coordAtDistance, projectOnLine } from "../geo";
+import { translate, useI18n, type Lang, type Params } from "../i18n";
 import type { LngLat, Poi, Roadwork, RouteResult, Waypoint, WeatherPoint } from "../types";
 
 interface Props {
@@ -46,6 +47,11 @@ function markerEl(html: string, bg: string, size = 26): HTMLDivElement {
 }
 
 export default function MapView(props: Props) {
+  const { lang } = useI18n();
+  // Aktuelle Sprache ohne Stale-Closure (Marker werden im Effekt neu gebaut).
+  const langRef = useRef<Lang>(lang);
+  langRef.current = lang;
+  const tr = (key: string, params?: Params) => translate(langRef.current, key, params);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loadedRef = useRef(false);
@@ -159,6 +165,7 @@ export default function MapView(props: Props) {
     props.selectedPois,
     props.weather,
     props.route,
+    lang,
   ]);
 
   function syncRoute() {
@@ -285,7 +292,7 @@ export default function MapView(props: Props) {
           new maplibregl.Popup({ offset: 14 }).setHTML(
             `<b>${escapeHtml(rw.title)}</b><br>${escapeHtml(rw.description ?? "")}` +
               `<br><span style="color:#9aa3b2">${rw.source.toUpperCase()} · ${
-                active ? "wird gemieden" : "wird befahren"
+                active ? tr("map.avoided") : tr("map.driven")
               }</span>`,
           ),
         )
@@ -305,7 +312,7 @@ export default function MapView(props: Props) {
         cbRef.current.onTogglePoi(poi);
       });
       const meta = isFuel
-        ? `${poi.brand ? escapeHtml(poi.brand) : "Tankstelle"}`
+        ? `${poi.brand ? escapeHtml(poi.brand) : tr("fuel.station")}`
         : `${escapeHtml(poi.kind)}${poi.cuisine ? " · " + escapeHtml(poi.cuisine) : ""}${
             poi.quality != null ? " · ★ " + poi.quality.toFixed(1) + " (OSM)" : ""
           }`;
@@ -314,9 +321,9 @@ export default function MapView(props: Props) {
         el,
         [poi.lng, poi.lat],
         `<b>${escapeHtml(poi.name)}</b><br>${meta}` +
-          `<br><span style="color:#9aa3b2">${poi.distance} m zur Route · klicken zum ${
-            selected ? "Entfernen" : "Hinzufügen"
-          }</span>`,
+          `<br><span style="color:#9aa3b2">${tr("poi.distanceToRoute", {
+            distance: poi.distance,
+          })} · ${selected ? tr("map.clickRemove") : tr("map.clickAdd")}</span>`,
       );
       const m = new maplibregl.Marker({ element: el })
         .setLngLat([poi.lng, poi.lat])
@@ -332,10 +339,13 @@ export default function MapView(props: Props) {
         map,
         el,
         [f.lng, f.lat],
-        `<b>${isFerry ? "Fähre" : "Maut"}</b><br>` +
-          `<span style="color:#9aa3b2">Länge ${
-            f.lengthM >= 1000 ? (f.lengthM / 1000).toFixed(1) + " km" : f.lengthM + " m"
-          }</span>`,
+        `<b>${isFerry ? tr("tf.ferry") : tr("tf.toll")}</b><br>` +
+          `<span style="color:#9aa3b2">${tr("tf.length", {
+            len:
+              f.lengthM >= 1000
+                ? (f.lengthM / 1000).toFixed(1) + " km"
+                : f.lengthM + " m",
+          })}</span>`,
       );
       const m = new maplibregl.Marker({ element: el }).setLngLat([f.lng, f.lat]).addTo(map);
       markersRef.current.push(m);
@@ -353,7 +363,7 @@ export default function MapView(props: Props) {
         map,
         el,
         [w.lng, w.lat],
-        `<b>${weatherText(w.weatherCode)}</b><br>` +
+        `<b>${weatherText(w.weatherCode, langRef.current)}</b><br>` +
           `<span style="color:#9aa3b2">${temps}` +
           `${w.precipMm != null ? " · ☔ " + w.precipMm.toFixed(1) + " mm" : ""}` +
           `${w.windMaxKmh != null ? " · 💨 " + Math.round(w.windMaxKmh) + " km/h" : ""}</span>`,

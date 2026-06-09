@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import type { RouteResult } from "../types";
 import { fmtDistance, fmtDuration } from "../format";
+import { useI18n } from "../i18n";
 
 interface Props {
   route: RouteResult | null;
@@ -81,6 +82,7 @@ export default function StatusBar({
   onHoverM,
   onExportGpx,
 }: Props) {
+  const { t } = useI18n();
   const totalM = route?.distanceM ?? 0;
   const elev = route?.elevation ?? [];
   const chart = useMemo(() => buildPath(elev, totalM), [elev, totalM]);
@@ -101,19 +103,19 @@ export default function StatusBar({
     <div className="statusbar">
       <div className="sb-stats">
         <div className="sb-stat">
-          <span className="sb-label">Distanz</span>
+          <span className="sb-label">{t("sb.distance")}</span>
           <span className="sb-value">{route ? fmtDistance(route.distanceM) : "–"}</span>
         </div>
         <div className="sb-sep" />
         <div className="sb-stat">
-          <span className="sb-label">Fahrzeit (ca.)</span>
+          <span className="sb-label">{t("sb.duration")}</span>
           <span className="sb-value">{route ? fmtDuration(route.durationS) : "–"}</span>
         </div>
 
         {allRoutes.length > 1 && (
           <>
             <div className="sb-sep" />
-            <div className="sb-variants" title="Streckenvariante wählen">
+            <div className="sb-variants" title={t("sb.variantsTitle")}>
               {allRoutes.map((r, i) => (
                 <button
                   key={i}
@@ -121,7 +123,7 @@ export default function StatusBar({
                   onClick={() => onSelectRoute(i)}
                   title={`${fmtDistance(r.distanceM)} · ${fmtDuration(r.durationS)}`}
                 >
-                  {i === 0 ? "Route" : `Var. ${i}`}
+                  {i === 0 ? t("sb.route") : t("sb.variant", { i })}
                   <span className="sb-variant-meta">{fmtDistance(r.distanceM)}</span>
                 </button>
               ))}
@@ -131,12 +133,14 @@ export default function StatusBar({
       </div>
 
       <div className="sb-mid">
-        {routeLoading && <span className="spinner">Berechne Route …</span>}
-        {!routeLoading && routeError && <span className="error">Fehler: {routeError}</span>}
+        {routeLoading && <span className="spinner">{t("sb.calculating")}</span>}
+        {!routeLoading && routeError && (
+          <span className="error">{t("common.error", { msg: routeError })}</span>
+        )}
         {!routeLoading && !routeError && chart && (
           <div
             className="elev"
-            title="Höhenprofil"
+            title={t("sb.elevTitle")}
             ref={elevRef}
             onMouseMove={onElevMove}
             onMouseLeave={() => onHoverM(null)}
@@ -200,12 +204,12 @@ export default function StatusBar({
           </div>
         )}
         {!routeLoading && !routeError && !chart && (
-          <span className="muted">Wegpunkte setzen, um eine Route zu planen.</span>
+          <span className="muted">{t("sb.placeWaypoints")}</span>
         )}
       </div>
 
       <button className="primary sb-export" onClick={onExportGpx} disabled={!route}>
-        ⬇ GPX exportieren
+        {t("sb.exportGpx")}
       </button>
     </div>
   );

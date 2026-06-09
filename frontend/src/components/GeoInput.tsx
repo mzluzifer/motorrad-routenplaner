@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { geocode } from "../api/client";
+import { useI18n } from "../i18n";
 import type { GeocodeResult } from "../types";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 
 /** Texteingabe mit Adresssuche (Nominatim) und Ergebnis-Dropdown. */
 export default function GeoInput({ value, placeholder, clearOnPick, onPick }: Props) {
+  const { t } = useI18n();
   const [text, setText] = useState(value);
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,7 @@ export default function GeoInput({ value, placeholder, clearOnPick, onPick }: Pr
           onChange={(e) => setText(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
         />
-        <button className="geo-go" type="submit" disabled={busy} title="Adresse suchen">
+        <button className="geo-go" type="submit" disabled={busy} title={t("geo.searchTitle")}>
           {busy ? "…" : "🔍"}
         </button>
       </form>
