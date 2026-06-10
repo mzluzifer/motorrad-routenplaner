@@ -446,6 +446,7 @@ export default function App() {
           setFuelPois([]);
           setWeather([]);
         }}
+        onExportGpx={exportGpx}
       />
       <div className="resizer" onMouseDown={startResize} title="Breite ziehen" />
       <div className="main">
@@ -476,7 +477,6 @@ export default function App() {
           onSelectRoute={setSelectedRouteIdx}
           hoverM={hoverM}
           onHoverM={setHoverM}
-          onExportGpx={exportGpx}
         />
       </div>
     </div>

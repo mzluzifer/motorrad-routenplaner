@@ -30,6 +30,11 @@ const de: Dict = {
   "topbar.repo": "⭐ Repository",
   "topbar.langTitle": "Sprache wechseln",
 
+  "donate.title": "Projekt unterstützen",
+  "donate.button": "❤ Mit PayPal spenden",
+  "donate.qrAlt": "PayPal-Spenden-QR-Code",
+  "donate.qrHint": "QR-Code scannen zum Spenden",
+
   "wp.title": "Wegpunkte",
   "wp.locating": "📍 Standort wird ermittelt …",
   "wp.useLocation": "📍 Aktueller Standort als Start",
@@ -136,6 +141,11 @@ const en: Dict = {
   "topbar.repo": "⭐ Repository",
   "topbar.langTitle": "Change language",
 
+  "donate.title": "Support this project",
+  "donate.button": "❤ Donate via PayPal",
+  "donate.qrAlt": "PayPal donation QR code",
+  "donate.qrHint": "Scan the QR code to donate",
+
   "wp.title": "Waypoints",
   "wp.locating": "📍 Locating …",
   "wp.useLocation": "📍 Current location as start",
@@ -241,6 +251,11 @@ const es: Dict = {
   "topbar.repoTitle": "Abrir proyecto en GitHub",
   "topbar.repo": "⭐ Repositorio",
   "topbar.langTitle": "Cambiar idioma",
+
+  "donate.title": "Apoyar este proyecto",
+  "donate.button": "❤ Donar con PayPal",
+  "donate.qrAlt": "Código QR de donación de PayPal",
+  "donate.qrHint": "Escanea el código QR para donar",
 
   "wp.title": "Puntos de ruta",
   "wp.locating": "📍 Localizando …",

@@ -17,7 +17,6 @@ interface Props {
   hoverM: number | null;
   /** Hover-Position melden (vom Überfahren des Höhenprofils). */
   onHoverM: (m: number | null) => void;
-  onExportGpx: () => void;
 }
 
 /** Höhe (interpoliert) an kumulierter Distanz `m` aus den Stützstellen. */
@@ -80,7 +79,6 @@ export default function StatusBar({
   onSelectRoute,
   hoverM,
   onHoverM,
-  onExportGpx,
 }: Props) {
   const { t } = useI18n();
   const totalM = route?.distanceM ?? 0;
@@ -207,10 +205,6 @@ export default function StatusBar({
           <span className="muted">{t("sb.placeWaypoints")}</span>
         )}
       </div>
-
-      <button className="primary sb-export" onClick={onExportGpx} disabled={!route}>
-        {t("sb.exportGpx")}
-      </button>
     </div>
   );
 }
