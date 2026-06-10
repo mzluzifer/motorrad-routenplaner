@@ -1,5 +1,7 @@
 # 🏍️ Motorrad-Routenplaner
 
+**🇩🇪 Deutsch** · [🇬🇧 English](README.en.md) · [🇪🇸 Español](README.es.md)
+
 Open-Source Web-App zum Planen von Motorradtouren: Route von A nach B (optional als
 Rundtour), beliebig viele Zwischenziele – per **Eingabefeld** (Adresse/Ort tippen)
 oder Karten-Klick gesetzt, Start optional per **aktuellem Standort**. Profil
